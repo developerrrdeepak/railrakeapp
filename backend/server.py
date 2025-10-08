@@ -1315,6 +1315,253 @@ async def download_report(report_id: str):
         headers={"Content-Disposition": f"attachment; filename={report_id}.csv"}
     )
 
+# Cost Optimization Models
+class CostOptimizationRequest(BaseModel):
+    order_ids: List[str]
+    max_budget: Optional[float] = None
+    optimization_type: str = "minimize_total_cost"  # minimize_total_cost, minimize_transport, minimize_penalties
+
+class CostBreakdown(BaseModel):
+    loading_cost: float
+    transport_cost: float
+    demurrage_cost: float
+    penalty_cost: float
+    total_cost: float
+
+class StockyardRecommendation(BaseModel):
+    id: str
+    name: str
+    location: str
+
+class CostAnalysis(BaseModel):
+    order_id: str
+    customer_name: str
+    material_name: str
+    quantity: float
+    destination: str
+    best_stockyard: StockyardRecommendation
+    cost_breakdown: CostBreakdown
+    cost_savings: float
+    efficiency_score: float
+
+class CostOptimizationResult(BaseModel):
+    total_orders: int
+    total_savings: float
+    average_efficiency: float
+    cost_analyses: List[CostAnalysis]
+    recommended_actions: List[str]
+
+# Cost Optimization Engine
+@api_router.post("/cost-optimization", response_model=CostOptimizationResult)
+async def optimize_costs(request: CostOptimizationRequest):
+    try:
+        cost_analyses = []
+        total_savings = 0
+        
+        for order_id in request.order_ids:
+            order = await db.orders.find_one({'_id': ObjectId(order_id)})
+            if not order:
+                continue
+            
+            order = obj_to_dict(order)
+            material = await db.materials.find_one({'_id': ObjectId(order['material_id'])})
+            
+            # Get all stockyards with this material
+            inventories = await db.inventory.find({
+                'material_id': order['material_id'],
+                'quantity': {'$gte': order['quantity']}
+            }).to_list(100)
+            
+            best_cost = float('inf')
+            best_stockyard_data = None
+            best_breakdown = None
+            
+            for inventory in inventories:
+                inventory = obj_to_dict(inventory)
+                stockyard = await db.stockyards.find_one({'_id': ObjectId(inventory['stockyard_id'])})
+                stockyard = obj_to_dict(stockyard)
+                
+                # Calculate cost breakdown
+                loading_cost = order['quantity'] * 25  # ₹25 per MT loading cost
+                
+                # Simplified distance calculation (in real app, use actual distance)
+                distance_km = 500 + (hash(stockyard['location'] + order['destination']) % 1000)
+                transport_cost = distance_km * 5.5 * order['quantity'] / 60  # ₹5.5 per km per wagon
+                
+                # Demurrage cost (based on loading point capacity and queue)
+                loading_points = await db.loading_points.find({'stockyard_id': stockyard['_id']}).to_list(10)
+                avg_utilization = sum(lp.get('current_utilization', 0.5) for lp in loading_points) / len(loading_points) if loading_points else 0.5
+                demurrage_days = max(1, avg_utilization * 3)  # More utilization = more wait time
+                demurrage_cost = demurrage_days * 2000 * (order['quantity'] / 60)  # ₹2000 per day per wagon
+                
+                # Penalty cost (based on deadline proximity)
+                days_to_deadline = order.get('days_until_deadline', 7)
+                transport_days = distance_km / 400  # Assume 400km per day
+                total_days = demurrage_days + transport_days
+                
+                penalty_cost = 0
+                if total_days > days_to_deadline:
+                    delay_days = total_days - days_to_deadline
+                    penalty_cost = delay_days * order.get('penalty_per_day', 5000)
+                
+                total_cost = loading_cost + transport_cost + demurrage_cost + penalty_cost
+                
+                if total_cost < best_cost:
+                    best_cost = total_cost
+                    best_stockyard_data = stockyard
+                    best_breakdown = {
+                        'loading_cost': loading_cost,
+                        'transport_cost': transport_cost,
+                        'demurrage_cost': demurrage_cost,
+                        'penalty_cost': penalty_cost,
+                        'total_cost': total_cost
+                    }
+            
+            if best_stockyard_data and best_breakdown:
+                # Calculate savings (compared to average cost)
+                average_cost = best_cost * 1.3  # Assume 30% higher without optimization
+                cost_savings = average_cost - best_cost
+                efficiency_score = min(95, (average_cost - best_cost) / average_cost * 100)
+                
+                total_savings += cost_savings
+                
+                cost_analyses.append(CostAnalysis(
+                    order_id=order_id,
+                    customer_name=order['customer_name'],
+                    material_name=material['name'] if material else 'Unknown',
+                    quantity=order['quantity'],
+                    destination=order['destination'],
+                    best_stockyard=StockyardRecommendation(
+                        id=best_stockyard_data['id'],
+                        name=best_stockyard_data['name'],
+                        location=best_stockyard_data['location']
+                    ),
+                    cost_breakdown=CostBreakdown(**best_breakdown),
+                    cost_savings=cost_savings,
+                    efficiency_score=efficiency_score
+                ))
+        
+        average_efficiency = sum(analysis.efficiency_score for analysis in cost_analyses) / len(cost_analyses) if cost_analyses else 0
+        
+        recommended_actions = [
+            f"Switch {len([a for a in cost_analyses if a.cost_savings > 10000])} high-impact orders to optimized stockyards",
+            f"Prioritize orders with penalty risks to avoid ₹{sum(a.cost_breakdown.penalty_cost for a in cost_analyses):,.0f} in penalties",
+            f"Coordinate loading schedules to reduce ₹{sum(a.cost_breakdown.demurrage_cost for a in cost_analyses):,.0f} in demurrage costs"
+        ]
+        
+        return CostOptimizationResult(
+            total_orders=len(cost_analyses),
+            total_savings=total_savings,
+            average_efficiency=average_efficiency,
+            cost_analyses=cost_analyses,
+            recommended_actions=recommended_actions
+        )
+        
+    except Exception as e:
+        logger.error(f"Cost optimization error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/implement-cost-optimization")
+async def implement_cost_optimization(data: Dict[str, Any]):
+    try:
+        cost_analyses = data.get('cost_analyses', [])
+        
+        for analysis in cost_analyses:
+            order_id = analysis['order_id']
+            best_stockyard_id = analysis['best_stockyard']['id']
+            
+            # Update order with recommended stockyard assignment
+            await db.orders.update_one(
+                {'_id': ObjectId(order_id)},
+                {'$set': {
+                    'assigned_stockyard_id': best_stockyard_id,
+                    'cost_optimized': True,
+                    'optimization_date': datetime.utcnow(),
+                    'estimated_total_cost': analysis['cost_breakdown']['total_cost'],
+                    'cost_savings': analysis['cost_savings']
+                }}
+            )
+        
+        return {
+            "message": f"Cost optimization implemented for {len(cost_analyses)} orders",
+            "total_orders_optimized": len(cost_analyses),
+            "implementation_date": datetime.utcnow()
+        }
+        
+    except Exception as e:
+        logger.error(f"Implementation error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Enhanced stockyard selection endpoint
+@api_router.get("/stockyard-selection/{order_id}")
+async def get_optimal_stockyard_selection(order_id: str):
+    try:
+        order = await db.orders.find_one({'_id': ObjectId(order_id)})
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+        
+        order = obj_to_dict(order)
+        
+        # Get all available stockyards with the required material
+        inventories = await db.inventory.find({
+            'material_id': order['material_id'],
+            'quantity': {'$gte': order['quantity']}
+        }).to_list(100)
+        
+        stockyard_options = []
+        
+        for inventory in inventories:
+            inventory = obj_to_dict(inventory)
+            stockyard = await db.stockyards.find_one({'_id': ObjectId(inventory['stockyard_id'])})
+            
+            if stockyard:
+                stockyard = obj_to_dict(stockyard)
+                
+                # Calculate comprehensive cost analysis
+                loading_cost = order['quantity'] * 25
+                distance_km = 500 + (hash(stockyard['location'] + order['destination']) % 1000)
+                transport_cost = distance_km * 5.5 * order['quantity'] / 60
+                
+                loading_points = await db.loading_points.find({'stockyard_id': ObjectId(inventory['stockyard_id'])}).to_list(10)
+                avg_utilization = sum(lp.get('current_utilization', 0.5) for lp in loading_points) / len(loading_points) if loading_points else 0.5
+                
+                demurrage_cost = max(1, avg_utilization * 3) * 2000 * (order['quantity'] / 60)
+                
+                total_cost = loading_cost + transport_cost + demurrage_cost
+                
+                stockyard_options.append({
+                    'stockyard_id': stockyard['id'],
+                    'stockyard_name': stockyard['name'],
+                    'location': stockyard['location'],
+                    'available_quantity': inventory['quantity'],
+                    'cost_per_unit': inventory['cost_per_unit'],
+                    'distance_km': distance_km,
+                    'loading_cost': loading_cost,
+                    'transport_cost': transport_cost,
+                    'demurrage_cost': demurrage_cost,
+                    'total_logistics_cost': total_cost,
+                    'loading_point_utilization': avg_utilization,
+                    'efficiency_score': max(50, 100 - (avg_utilization * 50))
+                })
+        
+        # Sort by total cost
+        stockyard_options.sort(key=lambda x: x['total_logistics_cost'])
+        
+        return {
+            'order_id': order_id,
+            'order_details': {
+                'customer_name': order['customer_name'],
+                'quantity': order['quantity'],
+                'destination': order['destination']
+            },
+            'stockyard_options': stockyard_options,
+            'recommendation': stockyard_options[0] if stockyard_options else None
+        }
+        
+    except Exception as e:
+        logger.error(f"Stockyard selection error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # WebSocket for Real-time Updates
 websocket_connections = []
 
