@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,6 +16,61 @@ interface DashboardStats {
   total_inventory_value: number;
   urgent_orders: number;
   avg_utilization: number;
+}
+
+interface ControlRoomDashboard {
+  timestamp: string;
+  active_rakes: {
+    planned: number;
+    loading: number;
+    in_transit: number;
+    unloading: number;
+  };
+  wagon_status_summary: {
+    available: number;
+    loaded: number;
+    in_transit: number;
+    maintenance: number;
+  };
+  stockyard_utilization: Record<string, number>;
+  urgent_alerts: Array<{
+    type: string;
+    message: string;
+    priority: string;
+  }>;
+  performance_kpis: {
+    efficiency: number;
+    utilization: number;
+    on_time_delivery: number;
+    cost_optimization: number;
+  };
+  live_tracking_count: number;
+}
+
+interface RealTimeTracking {
+  timestamp: string;
+  wagons: Array<{
+    wagon_id: string;
+    wagon_number: string;
+    status: string;
+    current_location: string;
+    load_percentage: number;
+    last_updated: string;
+  }>;
+}
+
+interface CapacityData {
+  timestamp: string;
+  loading_points: Array<{
+    loading_point_id: string;
+    loading_point_name: string;
+    current_utilization: number;
+    available_capacity: number;
+    queued_rakes: number;
+    estimated_wait_time: number;
+    status: string;
+  }>;
+  overall_utilization: number;
 }
 
 export default function DashboardScreen() {
