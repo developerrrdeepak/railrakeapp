@@ -66,6 +66,15 @@ export default function TabLayout() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="control-room"
+        options={{
+          title: 'Control Room',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="desktop" size={size} color={color} />
+          ),
+        }}
+      />
     </Tabs>
   );
 }
