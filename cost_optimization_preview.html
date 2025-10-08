@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cost & Efficiency Optimization - Railway Control Room</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f0f23;
+            color: #fff;
+            overflow-x: hidden;
+        }
+        
+        .container {
+            max-width: 390px;
+            margin: 0 auto;
+            background: #0f0f23;
+            min-height: 100vh;
+            padding: 20px 16px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+        
+        .icon {
+            font-size: 32px;
+            margin-bottom: 8px;
+        }
+        
+        .title {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+        
+        .subtitle {
+            font-size: 14px;
+            color: #888;
+            line-height: 1.4;
+        }
+        
+        .budget-card {
+            background: #1a1a2e;
+            border-radius: 12px;
+            border: 1px solid #2a2a3e;
+            padding: 16px;
+            margin-bottom: 24px;
+        }
+        
+        .budget-label {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        
+        .budget-input {
+            background: #2a2a3e;
+            border: none;
+            border-radius: 8px;
+            padding: 12px;
+            color: #fff;
+            font-size: 16px;
+            width: 100%;
+        }
+        
+        .summary-cards {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        
+        .summary-card {
+            flex: 1;
+            background: #1a1a2e;
+            border: 1px solid #2a2a3e;
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+        }
+        
+        .summary-value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #f39c12;
+            margin-bottom: 4px;
+        }
+        
+        .summary-label {
+            font-size: 12px;
+            color: #888;
+        }
+        
+        .actions-card {
+            background: #1a1a2e;
+            border: 1px solid #2a2a3e;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+        
+        .card-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 12px;
+        }
+        
+        .action-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        
+        .action-arrow {
+            color: #51cf66;
+            margin-right: 8px;
+        }
+        
+        .action-text {
+            font-size: 14px;
+            color: #a0a0a0;
+            line-height: 1.4;
+        }
+        
+        .analysis-card {
+            background: #1a1a2e;
+            border: 1px solid #2a2a3e;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+        
+        .analysis-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        
+        .customer-name {
+            font-size: 16px;
+            font-weight: bold;
+        }
+        
+        .savings-badge {
+            background: #51cf66;
+            color: #fff;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .analysis-detail {
+            font-size: 14px;
+            color: #a0a0a0;
+            margin-bottom: 4px;
+        }
+        
+        .stockyard-recommendation {
+            font-size: 14px;
+            color: #4a90e2;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+        
+        .cost-breakdown {
+            background: #2a2a3e;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+        
+        .cost-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 4px;
+        }
+        
+        .cost-label {
+            font-size: 13px;
+            color: #a0a0a0;
+        }
+        
+        .cost-value {
+            font-size: 13px;
+            font-weight: 500;
+        }
+        
+        .total-cost-row {
+            border-top: 1px solid #4a4a5e;
+            margin-top: 4px;
+            padding-top: 4px;
+        }
+        
+        .total-label {
+            font-size: 14px;
+            font-weight: bold;
+        }
+        
+        .total-value {
+            font-size: 14px;
+            font-weight: bold;
+            color: #f39c12;
+        }
+        
+        .efficiency-bar {
+            height: 20px;
+            background: #2a2a3e;
+            border-radius: 10px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .efficiency-fill {
+            position: absolute;
+            left: 0;
+            height: 100%;
+            background: #51cf66;
+            border-radius: 10px;
+            width: 23%;
+        }
+        
+        .efficiency-text {
+            font-size: 12px;
+            font-weight: bold;
+            z-index: 1;
+        }
+        
+        .implement-button {
+            background: #51cf66;
+            border: none;
+            border-radius: 8px;
+            padding: 16px;
+            color: #fff;
+            font-size: 16px;
+            font-weight: bold;
+            width: 100%;
+            margin-bottom: 24px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        
+        .tab-bar {
+            position: fixed;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 390px;
+            background: #1a1a2e;
+            border-top: 1px solid #2a2a3e;
+            padding: 8px 0;
+            display: flex;
+            justify-content: space-around;
+        }
+        
+        .tab-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 4px 8px;
+            color: #666;
+            font-size: 11px;
+        }
+        
+        .tab-item.active {
+            color: #f39c12;
+        }
+        
+        .tab-icon {
+            font-size: 20px;
+            margin-bottom: 2px;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.3s ease-out;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header fade-in">
+            <div class="icon">🧮</div>
+            <div class="title">Cost & Efficiency Optimization</div>
+            <div class="subtitle">Minimize logistics costs across loading, transport, demurrage & penalties</div>
+        </div>
+
+        <div class="budget-card fade-in">
+            <div class="budget-label">Maximum Cost Budget (Optional)</div>
+            <input type="text" class="budget-input" placeholder="Enter max budget in ₹" />
+        </div>
+
+        <div class="fade-in">
+            <div class="summary-cards">
+                <div class="summary-card">
+                    <div class="summary-value">₹4,44,658</div>
+                    <div class="summary-label">Total Savings</div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-value">23.1%</div>
+                    <div class="summary-label">Avg Efficiency</div>
+                </div>
+            </div>
+
+            <div class="actions-card">
+                <div class="card-title">Recommended Actions</div>
+                <div class="action-item">
+                    <div class="action-arrow">→</div>
+                    <div class="action-text">Switch 2 high-impact orders to optimized stockyards</div>
+                </div>
+                <div class="action-item">
+                    <div class="action-arrow">→</div>
+                    <div class="action-text">Prioritize orders with penalty risks to avoid ₹0 in penalties</div>
+                </div>
+                <div class="action-item">
+                    <div class="action-arrow">→</div>
+                    <div class="action-text">Coordinate loading schedules to reduce ₹3,16,667 in demurrage costs</div>
+                </div>
+            </div>
+
+            <div class="card-title">Detailed Cost Analysis</div>
+            
+            <div class="analysis-card">
+                <div class="analysis-header">
+                    <div class="customer-name">ABC Steel Ltd</div>
+                    <div class="savings-badge">Save ₹2,80,138</div>
+                </div>
+                <div class="analysis-detail">Coal - 5000 MT → Mumbai</div>
+                <div class="stockyard-recommendation">Best Source: Stockyard A (Plant North)</div>
+                
+                <div class="cost-breakdown">
+                    <div class="cost-row">
+                        <div class="cost-label">Loading:</div>
+                        <div class="cost-value">₹1,25,000</div>
+                    </div>
+                    <div class="cost-row">
+                        <div class="cost-label">Transport:</div>
+                        <div class="cost-value">₹6,42,125</div>
+                    </div>
+                    <div class="cost-row">
+                        <div class="cost-label">Demurrage:</div>
+                        <div class="cost-value">₹1,66,667</div>
+                    </div>
+                    <div class="cost-row">
+                        <div class="cost-label">Penalty Risk:</div>
+                        <div class="cost-value">₹0</div>
+                    </div>
+                    <div class="cost-row total-cost-row">
+                        <div class="total-label">Total Cost:</div>
+                        <div class="total-value">₹9,33,792</div>
+                    </div>
+                </div>
+                
+                <div class="efficiency-bar">
+                    <div class="efficiency-fill"></div>
+                    <div class="efficiency-text">23.1% Efficient</div>
+                </div>
+            </div>
+
+            <div class="analysis-card">
+                <div class="analysis-header">
+                    <div class="customer-name">XYZ Industries</div>
+                    <div class="savings-badge">Save ₹1,64,520</div>
+                </div>
+                <div class="analysis-detail">Steel Coils - 3000 MT → Delhi</div>
+                <div class="stockyard-recommendation">Best Source: Stockyard B (Plant South)</div>
+                
+                <div class="cost-breakdown">
+                    <div class="cost-row">
+                        <div class="cost-label">Loading:</div>
+                        <div class="cost-value">₹75,000</div>
+                    </div>
+                    <div class="cost-row">
+                        <div class="cost-label">Transport:</div>
+                        <div class="cost-value">₹3,23,400</div>
+                    </div>
+                    <div class="cost-row">
+                        <div class="cost-label">Demurrage:</div>
+                        <div class="cost-value">₹1,50,000</div>
+                    </div>
+                    <div class="cost-row">
+                        <div class="cost-label">Penalty Risk:</div>
+                        <div class="cost-value">₹0</div>
+                    </div>
+                    <div class="cost-row total-cost-row">
+                        <div class="total-label">Total Cost:</div>
+                        <div class="total-value">₹5,48,400</div>
+                    </div>
+                </div>
+                
+                <div class="efficiency-bar">
+                    <div class="efficiency-fill"></div>
+                    <div class="efficiency-text">23.1% Efficient</div>
+                </div>
+            </div>
+
+            <button class="implement-button">
+                ✓ Implement Optimization
+            </button>
+        </div>
+    </div>
+
+    <div class="tab-bar">
+        <div class="tab-item">
+            <div class="tab-icon">🏠</div>
+            <div>Dashboard</div>
+        </div>
+        <div class="tab-item">
+            <div class="tab-icon">📋</div>
+            <div>Orders</div>
+        </div>
+        <div class="tab-item">
+            <div class="tab-icon">📦</div>
+            <div>Inventory</div>
+        </div>
+        <div class="tab-item">
+            <div class="tab-icon">🚂</div>
+            <div>Rakes</div>
+        </div>
+        <div class="tab-item">
+            <div class="tab-icon">✨</div>
+            <div>AI Optimize</div>
+        </div>
+        <div class="tab-item active">
+            <div class="tab-icon">🧮</div>
+            <div>Cost Optimize</div>
+        </div>
+        <div class="tab-item">
+            <div class="tab-icon">🖥️</div>
+            <div>Control Room</div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add fade-in animation to elements
+            setTimeout(() => {
+                document.querySelectorAll('.fade-in').forEach((el, index) => {
+                    setTimeout(() => {
+                        el.style.opacity = '1';
+                        el.style.transform = 'translateY(0)';
+                    }, index * 100);
+                });
+            }, 100);
+            
+            // Button click animation
+            document.querySelector('.implement-button').addEventListener('click', function() {
+                this.style.transform = 'scale(0.98)';
+                setTimeout(() => {
+                    this.style.transform = 'scale(1)';
+                    alert('✅ Cost optimization implemented successfully!\n\nOrders have been assigned to optimal stockyards.\nTotal savings: ₹4,44,658');
+                }, 150);
+            });
+        });
+    </script>
+</body>
+</html>
