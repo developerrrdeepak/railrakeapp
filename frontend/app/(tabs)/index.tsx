@@ -419,25 +419,131 @@ const styles = StyleSheet.create({
     backgroundColor: '#0f0f23',
   },
   scrollContent: {
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingBottom: 24,
   },
   header: {
-    fontSize: 28,
+    backgroundColor: '#1a1a2e',
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#2a2a3e',
+  },
+  headerTitle: {
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#ffffff',
     marginBottom: 4,
   },
-  subtitle: {
+  headerSubtitle: {
     fontSize: 14,
     color: '#888',
+    marginBottom: 12,
+  },
+  liveIndicator: {
+    position: 'absolute',
+    top: 20,
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1e7e34',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  liveIcon: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#51cf66',
+    marginRight: 6,
+  },
+  liveText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#ffffff',
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#1a1a2e',
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    marginHorizontal: 4,
+    borderRadius: 8,
+    backgroundColor: '#2a2a3e',
+  },
+  activeTab: {
+    backgroundColor: '#4a90e2',
+  },
+  tabText: {
+    fontSize: 12,
+    color: '#666',
+    marginLeft: 6,
+    fontWeight: '500',
+  },
+  activeTabText: {
+    color: '#ffffff',
+  },
+  loadingText: {
+    color: '#ffffff',
+    marginTop: 16,
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  // KPI Section
+  kpiSection: {
+    marginTop: 16,
     marginBottom: 24,
   },
-  statsGrid: {
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    marginBottom: 16,
+  },
+  kpiGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    marginHorizontal: -6,
+  },
+  kpiCard: {
+    backgroundColor: '#1a1a2e',
+    borderRadius: 12,
+    padding: 16,
+    margin: 6,
+    width: '45%',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#2a2a3e',
+  },
+  kpiValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#4a90e2',
+    marginBottom: 4,
+  },
+  kpiLabel: {
+    fontSize: 12,
+    color: '#a0a0a0',
+    textAlign: 'center',
+  },
+  // Operations Section
+  operationsSection: {
+    marginBottom: 24,
+  },
+  operationsGrid: {
+    flexDirection: 'row',
     marginHorizontal: -8,
   },
-  statCard: {
+  operationCard: {
+    flex: 1,
     backgroundColor: '#1a1a2e',
     borderRadius: 12,
     padding: 16,
@@ -446,76 +552,230 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#2a2a3e',
   },
-  primaryCard: {
-    width: '100%',
-    borderColor: '#ff6b6b',
-    borderWidth: 2,
-  },
-  secondaryCard: {
-    width: '45%',
-  },
-  fullWidth: {
-    width: '100%',
-    alignItems: 'stretch',
-  },
-  statValue: {
-    fontSize: 36,
-    fontWeight: 'bold',
-    color: '#ffffff',
-    marginTop: 8,
-  },
-  statLabel: {
-    fontSize: 14,
-    color: '#a0a0a0',
-    marginTop: 4,
-  },
-  statSubtext: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 2,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#ffffff',
-    marginLeft: 12,
-  },
-  valueAmount: {
+  operationValue: {
     fontSize: 32,
     fontWeight: 'bold',
     color: '#ffffff',
-    marginLeft: 40,
+    marginVertical: 8,
+  },
+  operationLabel: {
+    fontSize: 14,
+    color: '#a0a0a0',
+    marginBottom: 4,
+  },
+  operationDetail: {
+    fontSize: 12,
+    color: '#666',
+  },
+  // Stockyard Section
+  stockyardSection: {
+    marginBottom: 24,
+  },
+  stockyardItem: {
+    backgroundColor: '#1a1a2e',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#2a2a3e',
+  },
+  stockyardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  stockyardName: {
+    fontSize: 16,
+    color: '#ffffff',
+    fontWeight: '600',
+  },
+  stockyardPercent: {
+    fontSize: 16,
+    color: '#4a90e2',
+    fontWeight: 'bold',
   },
   progressBar: {
     height: 8,
     backgroundColor: '#2a2a3e',
     borderRadius: 4,
     overflow: 'hidden',
-    marginVertical: 12,
   },
   progressFill: {
     height: '100%',
     backgroundColor: '#38bdf8',
   },
-  percentText: {
-    fontSize: 20,
-    fontWeight: 'bold',
+  // Tracking Section
+  trackingSection: {
+    marginTop: 16,
+  },
+  trackingCount: {
+    fontSize: 14,
+    color: '#888',
+    marginBottom: 16,
+  },
+  wagonCard: {
+    backgroundColor: '#1a1a2e',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#2a2a3e',
+  },
+  wagonHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  wagonNumber: {
+    fontSize: 16,
     color: '#ffffff',
+    fontWeight: 'bold',
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statusText: {
+    fontSize: 10,
+    color: '#ffffff',
+    fontWeight: 'bold',
+  },
+  wagonLocation: {
+    fontSize: 14,
+    color: '#a0a0a0',
+    marginBottom: 12,
+  },
+  loadContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  loadLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginRight: 12,
+    width: 80,
+  },
+  loadBar: {
+    flex: 1,
+    height: 6,
+    backgroundColor: '#2a2a3e',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  loadFill: {
+    height: '100%',
+    backgroundColor: '#ffd93d',
+  },
+  // Capacity Section
+  capacitySection: {
+    marginTop: 16,
+  },
+  capacityOverall: {
+    fontSize: 16,
+    color: '#4a90e2',
+    fontWeight: 'bold',
+    marginBottom: 16,
     textAlign: 'center',
   },
+  capacityCard: {
+    backgroundColor: '#1a1a2e',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#2a2a3e',
+  },
+  capacityHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  capacityName: {
+    fontSize: 16,
+    color: '#ffffff',
+    fontWeight: '600',
+  },
+  statusIndicator: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statusIndicatorText: {
+    fontSize: 10,
+    color: '#ffffff',
+    fontWeight: 'bold',
+  },
+  capacityMetrics: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  capacityMetric: {
+    alignItems: 'center',
+  },
+  metricValue: {
+    fontSize: 18,
+    color: '#ffffff',
+    fontWeight: 'bold',
+  },
+  metricLabel: {
+    fontSize: 12,
+    color: '#a0a0a0',
+    marginTop: 4,
+  },
+  // Alerts Section
+  alertsSection: {
+    marginTop: 16,
+  },
+  alertCard: {
+    backgroundColor: '#1a1a2e',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    borderTopWidth: 1,
+    borderRightWidth: 1,
+    borderBottomWidth: 1,
+    borderTopColor: '#2a2a3e',
+    borderRightColor: '#2a2a3e',
+    borderBottomColor: '#2a2a3e',
+  },
+  alertHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  alertPriority: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginLeft: 8,
+  },
+  alertMessage: {
+    fontSize: 14,
+    color: '#ffffff',
+    lineHeight: 20,
+  },
+  reportButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#4a90e2',
+    padding: 16,
+    borderRadius: 12,
+    marginTop: 16,
+  },
+  reportButtonText: {
+    fontSize: 16,
+    color: '#ffffff',
+    fontWeight: 'bold',
+    marginLeft: 8,
+  },
+  // Actions Section
   actionsSection: {
     marginTop: 24,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#ffffff',
-    marginBottom: 16,
   },
   actionButton: {
     flexDirection: 'row',
