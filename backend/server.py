@@ -1150,12 +1150,16 @@ async def get_pending_approvals():
         approval = obj_to_dict(approval)
         # Get entity details
         entity_details = None
-        if approval['entity_type'] == 'rake':
-            entity = await db.rakes.find_one({'_id': ObjectId(approval['entity_id'])})
-            entity_details = obj_to_dict(entity) if entity else None
-        elif approval['entity_type'] == 'order':
-            entity = await db.orders.find_one({'_id': ObjectId(approval['entity_id'])})
-            entity_details = obj_to_dict(entity) if entity else None
+        try:
+            if approval['entity_type'] == 'rake':
+                entity = await db.rakes.find_one({'_id': ObjectId(approval['entity_id'])})
+                entity_details = obj_to_dict(entity) if entity else None
+            elif approval['entity_type'] == 'order':
+                entity = await db.orders.find_one({'_id': ObjectId(approval['entity_id'])})
+                entity_details = obj_to_dict(entity) if entity else None
+        except:
+            # If ObjectId is invalid, set entity_details to None
+            entity_details = None
             
         approval['entity_details'] = entity_details
         result.append(WorkflowApprovalResponse(**approval))
