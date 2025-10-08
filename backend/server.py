@@ -699,9 +699,140 @@ async def initialize_sample_data():
             {"name": "LP-South-1", "capacity": 8, "current_utilization": 0.5, "stockyard_id": stockyard_ids[1]},
             {"name": "LP-East-1", "capacity": 12, "current_utilization": 0.2, "stockyard_id": stockyard_ids[2]},
         ]
-        await db.loading_points.insert_many(loading_points)
+        lp_result = await db.loading_points.insert_many(loading_points)
+        lp_ids = [str(id) for id in lp_result.inserted_ids]
         
-        return {"message": "Sample data initialized successfully"}
+        # Create advanced control room sample data
+        
+        # Create compatibility rules
+        compatibility_rules = [
+            {"material_type": "Bulk", "wagon_type": "BOXN", "compatibility_score": 0.95, "restrictions": [], "loading_efficiency": 0.9},
+            {"material_type": "Bulk", "wagon_type": "BCN", "compatibility_score": 0.85, "restrictions": ["no_heavy_loads"], "loading_efficiency": 0.8},
+            {"material_type": "Finished", "wagon_type": "BRN", "compatibility_score": 0.9, "restrictions": [], "loading_efficiency": 0.85},
+            {"material_type": "Finished", "wagon_type": "BOST", "compatibility_score": 0.95, "restrictions": [], "loading_efficiency": 0.9},
+        ]
+        await db.compatibility_rules.insert_many(compatibility_rules)
+        
+        # Create routes
+        routes = [
+            {"name": "Plant-Mumbai", "origin": "Plant North", "destination": "Mumbai", "distance_km": 1200, "estimated_time_hours": 24, "restrictions": [], "cost_per_km": 5.0, "is_active": True},
+            {"name": "Plant-Delhi", "origin": "Plant South", "destination": "Delhi", "distance_km": 800, "estimated_time_hours": 18, "restrictions": ["no_hazardous"], "cost_per_km": 6.0, "is_active": True},
+            {"name": "Plant-Kolkata", "origin": "Plant East", "destination": "Kolkata", "distance_km": 600, "estimated_time_hours": 14, "restrictions": [], "cost_per_km": 4.5, "is_active": True},
+            {"name": "Plant-Chennai", "origin": "Plant North", "destination": "Chennai", "distance_km": 1500, "estimated_time_hours": 30, "restrictions": [], "cost_per_km": 5.5, "is_active": True},
+        ]
+        await db.routes.insert_many(routes)
+        
+        # Create wagon tracking data
+        wagon_ids = []
+        for i in range(1, 51):
+            wagon_id = f"{i:03d}"
+            wagon_ids.append(wagon_id)
+        
+        wagon_tracking = []
+        for i, wagon_id in enumerate(wagon_ids[:10]):  # Track first 10 wagons
+            tracking = {
+                "wagon_id": wagon_id,
+                "current_location": f"Location-{(i % 3) + 1}",
+                "destination": random.choice(["Mumbai", "Delhi", "Kolkata", "Chennai"]) if i < 5 else None,
+                "status": random.choice(["available", "loaded", "in_transit", "maintenance"]),
+                "load_percentage": random.uniform(0, 100),
+                "estimated_arrival": datetime.utcnow() + timedelta(hours=random.randint(2, 48)) if i < 5 else None,
+                "last_updated": datetime.utcnow(),
+                "gps_coordinates": {"lat": 19.0760 + random.uniform(-1, 1), "lng": 72.8777 + random.uniform(-1, 1)}
+            }
+            wagon_tracking.append(tracking)
+        await db.wagon_tracking.insert_many(wagon_tracking)
+        
+        # Create capacity monitoring data
+        capacity_monitors = []
+        for lp_id in lp_ids:
+            for hour in range(24):
+                monitor = {
+                    "loading_point_id": lp_id,
+                    "timestamp": datetime.utcnow() - timedelta(hours=hour),
+                    "current_utilization": random.uniform(0.2, 0.9),
+                    "planned_utilization": random.uniform(0.5, 1.0),
+                    "available_capacity": random.uniform(2, 8),
+                    "queued_rakes": random.randint(0, 3),
+                    "estimated_wait_time": random.uniform(0.5, 4)
+                }
+                capacity_monitors.append(monitor)
+        await db.capacity_monitoring.insert_many(capacity_monitors)
+        
+        # Create multi-destination rake
+        multi_dest_rake = {
+            "rake_number": "MDR-001",
+            "destinations": [
+                {"destination": "Mumbai", "wagon_ids": wagon_ids[:10], "order_ids": []},
+                {"destination": "Delhi", "wagon_ids": wagon_ids[10:20], "order_ids": []},
+            ],
+            "total_wagons": 20,
+            "formation_date": datetime.utcnow(),
+            "status": "planned",
+            "route_plan": ["Plant North", "Mumbai", "Delhi"],
+            "total_distance": 2000,
+            "estimated_completion": datetime.utcnow() + timedelta(days=3),
+            "ai_recommendation": "Optimized for multi-destination efficiency with cost savings of 15%"
+        }
+        await db.multi_destination_rakes.insert_one(multi_dest_rake)
+        
+        # Create workflow approvals
+        workflow_approvals = [
+            {
+                "entity_type": "rake",
+                "entity_id": "sample_rake_id",
+                "approver_id": "operator_001",
+                "approval_status": "pending",
+                "comments": "Pending review for high priority order",
+                "requested_at": datetime.utcnow()
+            },
+            {
+                "entity_type": "order",
+                "entity_id": "sample_order_id", 
+                "approver_id": "supervisor_001",
+                "approval_status": "approved",
+                "comments": "Approved for immediate dispatch",
+                "requested_at": datetime.utcnow() - timedelta(hours=2),
+                "processed_at": datetime.utcnow() - timedelta(hours=1)
+            }
+        ]
+        await db.workflow_approvals.insert_many(workflow_approvals)
+        
+        # Create ERP sync records
+        erp_syncs = [
+            {
+                "system_name": "SAP",
+                "last_sync": datetime.utcnow() - timedelta(minutes=30),
+                "sync_status": "success",
+                "records_synced": 1250,
+                "error_message": None
+            },
+            {
+                "system_name": "Oracle",
+                "last_sync": datetime.utcnow() - timedelta(hours=2),
+                "sync_status": "success", 
+                "records_synced": 890,
+                "error_message": None
+            }
+        ]
+        await db.erp_sync.insert_many(erp_syncs)
+        
+        # Create performance metrics
+        performance_metrics = []
+        for day in range(7):
+            metrics = {
+                "date": datetime.utcnow() - timedelta(days=day),
+                "total_rakes_dispatched": random.randint(8, 15),
+                "average_loading_time": random.uniform(2.5, 4.5),
+                "on_time_delivery_rate": random.uniform(0.85, 0.95),
+                "cost_efficiency": random.uniform(0.8, 0.92),
+                "wagon_utilization_rate": random.uniform(0.75, 0.9),
+                "customer_satisfaction_score": random.uniform(4.2, 4.8)
+            }
+            performance_metrics.append(metrics)
+        await db.performance_metrics.insert_many(performance_metrics)
+        
+        return {"message": "Advanced control room sample data initialized successfully"}
     except Exception as e:
         logger.error(f"Error initializing data: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
