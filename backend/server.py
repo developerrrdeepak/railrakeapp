@@ -706,9 +706,502 @@ async def initialize_sample_data():
         logger.error(f"Error initializing data: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# =====================================================
+# ADVANCED CONTROL ROOM FEATURES API ENDPOINTS
+# =====================================================
+
+# Real-time Wagon Tracking
+@api_router.post("/wagon-tracking", response_model=WagonTrackingResponse)
+async def create_wagon_tracking(tracking: WagonTracking):
+    tracking_dict = tracking.dict(exclude={'id'})
+    result = await db.wagon_tracking.insert_one(tracking_dict)
+    
+    # Get wagon details
+    tracking_obj = await db.wagon_tracking.find_one({'_id': result.inserted_id})
+    tracking_obj = obj_to_dict(tracking_obj)
+    wagon = await db.wagons.find_one({'_id': ObjectId(tracking_obj['wagon_id'])})
+    tracking_obj['wagon_number'] = wagon['wagon_number'] if wagon else None
+    tracking_obj['wagon_type'] = wagon['type'] if wagon else None
+    
+    return WagonTrackingResponse(**tracking_obj)
+
+@api_router.get("/wagon-tracking", response_model=List[WagonTrackingResponse])
+async def get_wagon_tracking():
+    trackings = await db.wagon_tracking.find().sort('last_updated', -1).to_list(1000)
+    result = []
+    for tracking in trackings:
+        tracking = obj_to_dict(tracking)
+        wagon = await db.wagons.find_one({'_id': ObjectId(tracking['wagon_id'])})
+        tracking['wagon_number'] = wagon['wagon_number'] if wagon else None
+        tracking['wagon_type'] = wagon['type'] if wagon else None
+        result.append(WagonTrackingResponse(**tracking))
+    return result
+
+@api_router.get("/wagon-tracking/real-time")
+async def get_real_time_tracking():
+    """Get real-time status of all wagons"""
+    # Simulate real-time data updates
+    wagons = await db.wagons.find().to_list(1000)
+    tracking_data = []
+    
+    for wagon in wagons:
+        wagon = obj_to_dict(wagon)
+        # Simulate real-time position and status
+        tracking_data.append({
+            "wagon_id": wagon['id'],
+            "wagon_number": wagon['wagon_number'],
+            "status": wagon['status'],
+            "current_location": f"Location-{random.randint(1, 10)}",
+            "load_percentage": random.uniform(0, 100),
+            "last_updated": datetime.utcnow().isoformat()
+        })
+    
+    return {"timestamp": datetime.utcnow(), "wagons": tracking_data}
+
+# Compatibility Matrix Management
+@api_router.post("/compatibility-rules", response_model=CompatibilityRuleResponse)
+async def create_compatibility_rule(rule: CompatibilityRule):
+    rule_dict = rule.dict(exclude={'id'})
+    result = await db.compatibility_rules.insert_one(rule_dict)
+    rule_dict['id'] = str(result.inserted_id)
+    return CompatibilityRuleResponse(**rule_dict)
+
+@api_router.get("/compatibility-rules", response_model=List[CompatibilityRuleResponse])
+async def get_compatibility_rules():
+    rules = await db.compatibility_rules.find().to_list(1000)
+    return [CompatibilityRuleResponse(**obj_to_dict(rule)) for rule in rules]
+
+@api_router.get("/compatibility-matrix/{material_type}")
+async def get_compatibility_matrix(material_type: str):
+    """Get compatibility matrix for a specific material type"""
+    rules = await db.compatibility_rules.find({"material_type": material_type}).to_list(100)
+    matrix = {}
+    for rule in rules:
+        rule = obj_to_dict(rule)
+        matrix[rule['wagon_type']] = {
+            "compatibility_score": rule['compatibility_score'],
+            "restrictions": rule['restrictions'],
+            "loading_efficiency": rule['loading_efficiency']
+        }
+    return {"material_type": material_type, "compatibility_matrix": matrix}
+
+# Route Management
+@api_router.post("/routes", response_model=RouteResponse)
+async def create_route(route: Route):
+    route_dict = route.dict(exclude={'id'})
+    result = await db.routes.insert_one(route_dict)
+    route_dict['id'] = str(result.inserted_id)
+    return RouteResponse(**route_dict)
+
+@api_router.get("/routes", response_model=List[RouteResponse])
+async def get_routes():
+    routes = await db.routes.find().to_list(1000)
+    return [RouteResponse(**obj_to_dict(route)) for route in routes]
+
+@api_router.post("/routes/validate")
+async def validate_route(route_data: Dict[str, Any]):
+    """Validate route feasibility and restrictions"""
+    origin = route_data.get('origin')
+    destination = route_data.get('destination')
+    wagon_type = route_data.get('wagon_type')
+    
+    # Check for existing routes
+    route = await db.routes.find_one({
+        "origin": origin, 
+        "destination": destination,
+        "is_active": True
+    })
+    
+    if not route:
+        return {
+            "valid": False,
+            "message": "No active route found between specified locations",
+            "restrictions": []
+        }
+    
+    route = obj_to_dict(route)
+    
+    # Check wagon type restrictions
+    wagon_restrictions = []
+    if wagon_type in route.get('restrictions', []):
+        wagon_restrictions.append(f"Wagon type {wagon_type} not allowed on this route")
+    
+    return {
+        "valid": len(wagon_restrictions) == 0,
+        "route_id": route['id'],
+        "distance_km": route['distance_km'],
+        "estimated_time_hours": route['estimated_time_hours'],
+        "cost_per_km": route['cost_per_km'],
+        "restrictions": wagon_restrictions,
+        "message": "Route validated successfully" if len(wagon_restrictions) == 0 else "Route has restrictions"
+    }
+
+# Multi-destination Rake Formation
+@api_router.post("/multi-destination-rakes", response_model=MultiDestinationRakeResponse)
+async def create_multi_destination_rake(rake: MultiDestinationRake):
+    rake_dict = rake.dict(exclude={'id'})
+    result = await db.multi_destination_rakes.insert_one(rake_dict)
+    rake_dict['id'] = str(result.inserted_id)
+    return MultiDestinationRakeResponse(**rake_dict)
+
+@api_router.get("/multi-destination-rakes", response_model=List[MultiDestinationRakeResponse])
+async def get_multi_destination_rakes():
+    rakes = await db.multi_destination_rakes.find().to_list(1000)
+    return [MultiDestinationRakeResponse(**obj_to_dict(rake)) for rake in rakes]
+
+@api_router.post("/optimize-multi-destination")
+async def optimize_multi_destination_rake(request: Dict[str, Any]):
+    """AI optimization for multi-destination rake formation"""
+    try:
+        destinations = request.get('destinations', [])
+        max_wagons = request.get('max_wagons', 50)
+        
+        # Fetch relevant data
+        orders_by_dest = {}
+        for dest in destinations:
+            orders = await db.orders.find({"destination": dest, "status": "pending"}).to_list(100)
+            orders_by_dest[dest] = [obj_to_dict(order) for order in orders]
+        
+        # Create AI prompt for multi-destination optimization
+        prompt = f"""
+        Optimize multi-destination rake formation for destinations: {destinations}
+        
+        Available orders by destination:
+        {json.dumps(orders_by_dest, indent=2, default=str)}
+        
+        Constraints:
+        - Maximum {max_wagons} wagons per rake
+        - Minimize total route distance
+        - Optimize loading sequence
+        - Consider destination proximity
+        
+        Provide optimal sequence and wagon allocation.
+        """
+        
+        # Initialize AI chat
+        llm_chat = LlmChat(
+            api_key=os.environ['EMERGENT_LLM_KEY'],
+            session_id=f"multi_dest_optimization_{datetime.utcnow().timestamp()}",
+            system_message="You are an expert in multi-destination railway logistics optimization."
+        ).with_model("openai", "gpt-4o")
+        
+        user_message = UserMessage(text=prompt)
+        response = await llm_chat.send_message(user_message)
+        
+        return {
+            "optimization_result": response,
+            "destinations": destinations,
+            "timestamp": datetime.utcnow()
+        }
+        
+    except Exception as e:
+        logger.error(f"Multi-destination optimization error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Capacity Monitoring
+@api_router.post("/capacity-monitoring", response_model=CapacityMonitorResponse)
+async def create_capacity_monitor(monitor: CapacityMonitor):
+    monitor_dict = monitor.dict(exclude={'id'})
+    result = await db.capacity_monitoring.insert_one(monitor_dict)
+    
+    monitor_obj = await db.capacity_monitoring.find_one({'_id': result.inserted_id})
+    monitor_obj = obj_to_dict(monitor_obj)
+    loading_point = await db.loading_points.find_one({'_id': ObjectId(monitor_obj['loading_point_id'])})
+    monitor_obj['loading_point_name'] = loading_point['name'] if loading_point else None
+    
+    return CapacityMonitorResponse(**monitor_obj)
+
+@api_router.get("/capacity-monitoring/real-time")
+async def get_real_time_capacity():
+    """Get real-time capacity utilization across all loading points"""
+    loading_points = await db.loading_points.find().to_list(1000)
+    capacity_data = []
+    
+    for lp in loading_points:
+        lp = obj_to_dict(lp)
+        # Simulate real-time capacity data
+        utilization = random.uniform(0.2, 0.9)
+        capacity_data.append({
+            "loading_point_id": lp['id'],
+            "loading_point_name": lp['name'],
+            "current_utilization": utilization,
+            "available_capacity": lp['capacity'] * (1 - utilization),
+            "queued_rakes": random.randint(0, 5),
+            "estimated_wait_time": utilization * 2,  # Hours
+            "status": "critical" if utilization > 0.8 else "warning" if utilization > 0.6 else "normal"
+        })
+    
+    return {
+        "timestamp": datetime.utcnow(),
+        "loading_points": capacity_data,
+        "overall_utilization": sum(lp['current_utilization'] for lp in capacity_data) / len(capacity_data)
+    }
+
+# ERP Integration
+@api_router.post("/erp-sync", response_model=ERPSyncResponse)
+async def create_erp_sync(sync: ERPSync):
+    sync_dict = sync.dict(exclude={'id'})
+    result = await db.erp_sync.insert_one(sync_dict)
+    sync_dict['id'] = str(result.inserted_id)
+    return ERPSyncResponse(**sync_dict)
+
+@api_router.get("/erp-sync/status")
+async def get_erp_sync_status():
+    """Get latest ERP synchronization status"""
+    syncs = await db.erp_sync.find().sort('last_sync', -1).to_list(10)
+    return {
+        "timestamp": datetime.utcnow(),
+        "recent_syncs": [obj_to_dict(sync) for sync in syncs],
+        "systems_status": {
+            "SAP": "connected" if syncs and syncs[0].get('system_name') == 'SAP' else "disconnected",
+            "Oracle": "connected" if syncs and syncs[0].get('system_name') == 'Oracle' else "disconnected"
+        }
+    }
+
+@api_router.post("/erp-sync/trigger")
+async def trigger_erp_sync(system_data: Dict[str, Any]):
+    """Trigger manual ERP synchronization"""
+    system_name = system_data.get('system_name')
+    
+    # Simulate ERP sync process
+    sync_record = {
+        "system_name": system_name,
+        "last_sync": datetime.utcnow(),
+        "sync_status": "success",
+        "records_synced": random.randint(100, 1000),
+        "error_message": None
+    }
+    
+    await db.erp_sync.insert_one(sync_record)
+    
+    return {
+        "message": f"ERP sync triggered for {system_name}",
+        "sync_id": str(sync_record.get('_id')),
+        "estimated_completion": datetime.utcnow() + timedelta(minutes=5)
+    }
+
+# Workflow Management
+@api_router.post("/workflow/approvals", response_model=WorkflowApprovalResponse)
+async def create_workflow_approval(approval: WorkflowApproval):
+    approval_dict = approval.dict(exclude={'id'})
+    result = await db.workflow_approvals.insert_one(approval_dict)
+    
+    approval_obj = await db.workflow_approvals.find_one({'_id': result.inserted_id})
+    approval_obj = obj_to_dict(approval_obj)
+    
+    # Get entity details based on type
+    entity_details = None
+    if approval_obj['entity_type'] == 'rake':
+        entity = await db.rakes.find_one({'_id': ObjectId(approval_obj['entity_id'])})
+        entity_details = obj_to_dict(entity) if entity else None
+    elif approval_obj['entity_type'] == 'order':
+        entity = await db.orders.find_one({'_id': ObjectId(approval_obj['entity_id'])})
+        entity_details = obj_to_dict(entity) if entity else None
+    
+    approval_obj['entity_details'] = entity_details
+    return WorkflowApprovalResponse(**approval_obj)
+
+@api_router.get("/workflow/approvals/pending")
+async def get_pending_approvals():
+    """Get all pending workflow approvals"""
+    approvals = await db.workflow_approvals.find({"approval_status": "pending"}).sort('requested_at', -1).to_list(100)
+    result = []
+    
+    for approval in approvals:
+        approval = obj_to_dict(approval)
+        # Get entity details
+        entity_details = None
+        if approval['entity_type'] == 'rake':
+            entity = await db.rakes.find_one({'_id': ObjectId(approval['entity_id'])})
+            entity_details = obj_to_dict(entity) if entity else None
+        elif approval['entity_type'] == 'order':
+            entity = await db.orders.find_one({'_id': ObjectId(approval['entity_id'])})
+            entity_details = obj_to_dict(entity) if entity else None
+            
+        approval['entity_details'] = entity_details
+        result.append(WorkflowApprovalResponse(**approval))
+    
+    return result
+
+@api_router.put("/workflow/approvals/{approval_id}")
+async def update_approval_status(approval_id: str, update_data: Dict[str, Any]):
+    """Update approval status (approve/reject)"""
+    update_dict = {
+        "approval_status": update_data.get('status'),
+        "comments": update_data.get('comments'),
+        "processed_at": datetime.utcnow()
+    }
+    
+    await db.workflow_approvals.update_one(
+        {'_id': ObjectId(approval_id)}, 
+        {'$set': update_dict}
+    )
+    
+    # Get updated approval
+    approval = await db.workflow_approvals.find_one({'_id': ObjectId(approval_id)})
+    return obj_to_dict(approval) if approval else None
+
+# Advanced Analytics and Performance
+@api_router.get("/analytics/performance")
+async def get_performance_analytics():
+    """Get comprehensive performance analytics"""
+    # Simulate performance data
+    end_date = datetime.utcnow()
+    start_date = end_date - timedelta(days=30)
+    
+    # Calculate metrics from existing data
+    total_orders = await db.orders.count_documents({})
+    completed_orders = await db.orders.count_documents({"status": "delivered"})
+    total_rakes = await db.rakes.count_documents({})
+    active_rakes = await db.rakes.count_documents({"status": {"$in": ["planned", "loading", "in_transit"]}})
+    
+    analytics = {
+        "period": {"start": start_date, "end": end_date},
+        "kpis": {
+            "order_completion_rate": (completed_orders / total_orders * 100) if total_orders > 0 else 0,
+            "rake_utilization_rate": (active_rakes / total_rakes * 100) if total_rakes > 0 else 0,
+            "on_time_delivery_rate": random.uniform(85, 95),
+            "cost_efficiency": random.uniform(88, 92),
+            "customer_satisfaction": random.uniform(4.2, 4.8)
+        },
+        "trends": {
+            "daily_dispatches": [random.randint(5, 15) for _ in range(30)],
+            "utilization_trend": [random.uniform(0.6, 0.9) for _ in range(30)],
+            "cost_trend": [random.uniform(1000, 2000) for _ in range(30)]
+        }
+    }
+    
+    return analytics
+
+# Control Room Dashboard
+@api_router.get("/control-room/dashboard")
+async def get_control_room_dashboard():
+    """Get comprehensive control room dashboard data"""
+    # Real-time stats
+    active_rakes_stats = {}
+    for status in ["planned", "loading", "in_transit", "unloading"]:
+        count = await db.rakes.count_documents({"status": status})
+        active_rakes_stats[status] = count
+    
+    wagon_status_stats = {}
+    for status in ["available", "loaded", "in_transit", "maintenance"]:
+        count = await db.wagons.count_documents({"status": status})
+        wagon_status_stats[status] = count
+    
+    # Stockyard utilization (simulated)
+    stockyards = await db.stockyards.find().to_list(100)
+    stockyard_util = {}
+    for sy in stockyards:
+        sy = obj_to_dict(sy)
+        stockyard_util[sy['name']] = random.uniform(0.4, 0.9)
+    
+    # Urgent alerts (simulated)
+    urgent_alerts = [
+        {"type": "delay", "message": "Rake R001 delayed by 2 hours", "priority": "high"},
+        {"type": "capacity", "message": "Loading Point LP-1 at 95% capacity", "priority": "medium"},
+        {"type": "maintenance", "message": "5 wagons due for maintenance", "priority": "low"}
+    ]
+    
+    # Performance KPIs
+    kpis = {
+        "efficiency": random.uniform(0.85, 0.95),
+        "utilization": random.uniform(0.75, 0.85),
+        "on_time_delivery": random.uniform(0.88, 0.96),
+        "cost_optimization": random.uniform(0.82, 0.92)
+    }
+    
+    dashboard_data = ControlRoomDashboard(
+        timestamp=datetime.utcnow(),
+        active_rakes=active_rakes_stats,
+        wagon_status_summary=wagon_status_stats,
+        stockyard_utilization=stockyard_util,
+        urgent_alerts=urgent_alerts,
+        performance_kpis=kpis,
+        live_tracking_count=sum(wagon_status_stats.values())
+    )
+    
+    return dashboard_data
+
+# Report Generation
+@api_router.post("/reports/generate")
+async def generate_report(request: ReportRequest):
+    """Generate various types of reports"""
+    report_id = f"RPT_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+    
+    # Simulate report generation process
+    report_data = {
+        "report_id": report_id,
+        "type": request.report_type,
+        "period": {"start": request.start_date, "end": request.end_date},
+        "generated_at": datetime.utcnow(),
+        "format": request.format
+    }
+    
+    # Store report metadata
+    await db.reports.insert_one(report_data)
+    
+    return ReportResponse(
+        report_id=report_id,
+        status="generated",
+        download_url=f"/api/reports/download/{report_id}",
+        generated_at=datetime.utcnow()
+    )
+
+@api_router.get("/reports/download/{report_id}")
+async def download_report(report_id: str):
+    """Download generated report"""
+    # Simulate CSV report generation
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Sample report data
+    writer.writerow(["Date", "Rakes Dispatched", "On-Time Delivery", "Cost Efficiency"])
+    for i in range(10):
+        writer.writerow([
+            (datetime.utcnow() - timedelta(days=i)).strftime('%Y-%m-%d'),
+            random.randint(5, 15),
+            f"{random.uniform(85, 95):.1f}%",
+            f"{random.uniform(1000, 2000):.2f}"
+        ])
+    
+    output.seek(0)
+    
+    return StreamingResponse(
+        io.BytesIO(output.getvalue().encode()),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={report_id}.csv"}
+    )
+
+# WebSocket for Real-time Updates
+websocket_connections = []
+
+@app.websocket("/ws/real-time-updates")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    websocket_connections.append(websocket)
+    try:
+        while True:
+            # Send real-time updates every 5 seconds
+            await asyncio.sleep(5)
+            
+            # Generate random update
+            update_data = {
+                "timestamp": datetime.utcnow().isoformat(),
+                "type": random.choice(["wagon_update", "rake_status", "capacity_alert"]),
+                "data": {
+                    "message": f"Update at {datetime.utcnow().strftime('%H:%M:%S')}",
+                    "value": random.randint(1, 100)
+                }
+            }
+            
+            await websocket.send_json(update_data)
+            
+    except WebSocketDisconnect:
+        websocket_connections.remove(websocket)
+
 @api_router.get("/")
 async def root():
-    return {"message": "Rake Formation API is running"}
+    return {"message": "Advanced Rake Formation Control Room API is running"}
 
 # Include the router in the main app
 app.include_router(api_router)
