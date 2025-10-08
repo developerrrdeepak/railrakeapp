@@ -1379,6 +1379,8 @@ async def optimize_costs(request: CostOptimizationRequest):
             for inventory in inventories:
                 inventory = obj_to_dict(inventory)
                 stockyard = await db.stockyards.find_one({'_id': ObjectId(inventory['stockyard_id'])})
+                if not stockyard:
+                    continue
                 stockyard = obj_to_dict(stockyard)
                 
                 # Calculate cost breakdown
