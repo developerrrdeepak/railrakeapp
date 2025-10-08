@@ -13,7 +13,7 @@ import random
 import time
 
 # Backend URL from environment
-BACKEND_URL = "https://railcontrol-1.preview.emergentagent.com/api"
+BACKEND_URL = "https://digital-control-room.preview.emergentagent.com/api"
 
 class AdvancedBackendTester:
     def __init__(self):
