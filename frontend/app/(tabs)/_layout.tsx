@@ -67,6 +67,15 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="cost-optimize"
+        options={{
+          title: 'Cost Optimize',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="calculator" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="control-room"
         options={{
           title: 'Control Room',
