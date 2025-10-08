@@ -1389,7 +1389,7 @@ async def optimize_costs(request: CostOptimizationRequest):
                 transport_cost = distance_km * 5.5 * order['quantity'] / 60  # ₹5.5 per km per wagon
                 
                 # Demurrage cost (based on loading point capacity and queue)
-                loading_points = await db.loading_points.find({'stockyard_id': stockyard['_id']}).to_list(10)
+                loading_points = await db.loading_points.find({'stockyard_id': inventory['stockyard_id']}).to_list(10)
                 avg_utilization = sum(lp.get('current_utilization', 0.5) for lp in loading_points) / len(loading_points) if loading_points else 0.5
                 demurrage_days = max(1, avg_utilization * 3)  # More utilization = more wait time
                 demurrage_cost = demurrage_days * 2000 * (order['quantity'] / 60)  # ₹2000 per day per wagon
