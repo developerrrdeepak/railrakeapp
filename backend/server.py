@@ -862,7 +862,15 @@ async def get_wagon_tracking():
     result = []
     for tracking in trackings:
         tracking = obj_to_dict(tracking)
-        wagon = await db.wagons.find_one({'_id': ObjectId(tracking['wagon_id'])})
+        # Try to find wagon by ObjectId first, then by wagon_number if that fails
+        wagon = None
+        try:
+            wagon = await db.wagons.find_one({'_id': ObjectId(tracking['wagon_id'])})
+        except:
+            # If ObjectId fails, try to find by wagon_number (for string IDs like "001")
+            wagon_number = f"W{tracking['wagon_id']}"
+            wagon = await db.wagons.find_one({'wagon_number': wagon_number})
+        
         tracking['wagon_number'] = wagon['wagon_number'] if wagon else None
         tracking['wagon_type'] = wagon['type'] if wagon else None
         result.append(WagonTrackingResponse(**tracking))
