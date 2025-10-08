@@ -145,6 +145,175 @@ class DashboardStats(BaseModel):
     urgent_orders: int
     avg_utilization: float
 
+# Enhanced Models for Advanced Control Room Features
+
+class WagonStatus(str, Enum):
+    AVAILABLE = "available"
+    LOADED = "loaded"
+    IN_TRANSIT = "in_transit"
+    MAINTENANCE = "maintenance"
+    EMPTY_RETURNING = "empty_returning"
+
+class RakeStatus(str, Enum):
+    PLANNED = "planned"
+    LOADING = "loading"
+    IN_TRANSIT = "in_transit"
+    UNLOADING = "unloading"
+    DELIVERED = "delivered"
+    CANCELLED = "cancelled"
+
+class OrderPriority(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    URGENT = "urgent"
+
+class ApprovalStatus(str, Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+# Real-time Tracking Models
+class WagonTracking(BaseModel):
+    id: Optional[str] = None
+    wagon_id: str
+    current_location: str
+    destination: Optional[str] = None
+    status: WagonStatus
+    load_percentage: float = 0.0
+    estimated_arrival: Optional[datetime] = None
+    last_updated: datetime = Field(default_factory=datetime.utcnow)
+    gps_coordinates: Optional[Dict[str, float]] = None  # {"lat": 0.0, "lng": 0.0}
+
+class WagonTrackingResponse(WagonTracking):
+    id: str
+    wagon_number: Optional[str] = None
+    wagon_type: Optional[str] = None
+
+# Compatibility Matrix
+class CompatibilityRule(BaseModel):
+    id: Optional[str] = None
+    material_type: str
+    wagon_type: str
+    compatibility_score: float  # 0.0 to 1.0
+    restrictions: List[str] = []
+    loading_efficiency: float = 1.0
+
+class CompatibilityRuleResponse(CompatibilityRule):
+    id: str
+
+# Route Management
+class Route(BaseModel):
+    id: Optional[str] = None
+    name: str
+    origin: str
+    destination: str
+    distance_km: float
+    estimated_time_hours: float
+    restrictions: List[str] = []
+    cost_per_km: float
+    is_active: bool = True
+
+class RouteResponse(Route):
+    id: str
+
+# Multi-destination Rake Formation
+class MultiDestinationRake(BaseModel):
+    id: Optional[str] = None
+    rake_number: str
+    destinations: List[Dict[str, Any]]  # [{"destination": "City", "wagon_ids": [], "order_ids": []}]
+    total_wagons: int
+    formation_date: datetime
+    status: RakeStatus
+    route_plan: List[str]  # Sequence of destinations
+    total_distance: float
+    estimated_completion: datetime
+    ai_recommendation: Optional[str] = None
+
+class MultiDestinationRakeResponse(MultiDestinationRake):
+    id: str
+
+# Capacity Monitoring
+class CapacityMonitor(BaseModel):
+    id: Optional[str] = None
+    loading_point_id: str
+    timestamp: datetime
+    current_utilization: float  # 0.0 to 1.0
+    planned_utilization: float
+    available_capacity: float
+    queued_rakes: int
+    estimated_wait_time: float  # in hours
+
+class CapacityMonitorResponse(CapacityMonitor):
+    id: str
+    loading_point_name: Optional[str] = None
+
+# ERP Integration
+class ERPSync(BaseModel):
+    id: Optional[str] = None
+    system_name: str  # "SAP", "Oracle", etc.
+    last_sync: datetime
+    sync_status: str  # "success", "failed", "in_progress"
+    records_synced: int
+    error_message: Optional[str] = None
+
+class ERPSyncResponse(ERPSync):
+    id: str
+
+# Workflow Management
+class WorkflowApproval(BaseModel):
+    id: Optional[str] = None
+    entity_type: str  # "rake", "order", "allocation"
+    entity_id: str
+    approver_id: str
+    approval_status: ApprovalStatus
+    comments: Optional[str] = None
+    requested_at: datetime = Field(default_factory=datetime.utcnow)
+    processed_at: Optional[datetime] = None
+
+class WorkflowApprovalResponse(WorkflowApproval):
+    id: str
+    entity_details: Optional[Dict] = None
+
+# Advanced Analytics
+class PerformanceMetrics(BaseModel):
+    id: Optional[str] = None
+    date: datetime
+    total_rakes_dispatched: int
+    average_loading_time: float
+    on_time_delivery_rate: float
+    cost_efficiency: float
+    wagon_utilization_rate: float
+    customer_satisfaction_score: float
+
+class PerformanceMetricsResponse(PerformanceMetrics):
+    id: str
+
+# Real-time Dashboard Data
+class ControlRoomDashboard(BaseModel):
+    timestamp: datetime
+    active_rakes: Dict[str, int]  # {"loading": 5, "in_transit": 10, "unloading": 3}
+    wagon_status_summary: Dict[str, int]  # {"available": 50, "loaded": 30, "maintenance": 5}
+    stockyard_utilization: Dict[str, float]  # {"Stockyard A": 0.75, "Stockyard B": 0.60}
+    urgent_alerts: List[Dict[str, Any]]
+    performance_kpis: Dict[str, float]
+    live_tracking_count: int
+
+# Report Generation
+class ReportRequest(BaseModel):
+    report_type: str  # "daily_plan", "performance", "inventory", "utilization"
+    start_date: datetime
+    end_date: datetime
+    format: str = "pdf"  # "pdf", "excel", "csv"
+    include_charts: bool = True
+    email_recipients: List[str] = []
+
+class ReportResponse(BaseModel):
+    report_id: str
+    status: str
+    download_url: Optional[str] = None
+    generated_at: datetime
+
 # Helper function to convert ObjectId to string
 def obj_to_dict(obj):
     if isinstance(obj, dict):
