@@ -1564,6 +1564,528 @@ async def get_optimal_stockyard_selection(order_id: str):
         logger.error(f"Stockyard selection error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# =====================================================
+# ADVANCED COST & EFFICIENCY OPTIMIZATION FEATURES
+# =====================================================
+
+# Models for Advanced Features
+class TransportMode(str, Enum):
+    RAIL = "rail"
+    ROAD = "road"
+    COMBINED = "combined"
+
+class FreightRate(BaseModel):
+    id: Optional[str] = None
+    transport_mode: TransportMode
+    origin: str
+    destination: str
+    cost_per_ton_km: float
+    base_cost: float
+    fuel_surcharge: float
+    distance_km: float
+    avg_transit_days: float
+    reliability_score: float  # 0.0 to 1.0
+    co2_emission_kg_per_ton_km: float
+    last_updated: datetime = Field(default_factory=datetime.utcnow)
+
+class FreightRateResponse(FreightRate):
+    id: str
+    total_cost_estimate: float
+
+class DemurrageAlert(BaseModel):
+    id: Optional[str] = None
+    rake_id: str
+    loading_point_id: str
+    start_time: datetime
+    current_duration_hours: float
+    cost_per_hour: float
+    total_demurrage_cost: float
+    alert_level: str  # "warning", "critical", "severe"
+    estimated_completion: Optional[datetime]
+    
+class DemurrageAlertResponse(DemurrageAlert):
+    id: str
+    rake_number: Optional[str]
+    loading_point_name: Optional[str]
+
+class WagonUtilization(BaseModel):
+    wagon_id: str
+    capacity: float
+    loaded_quantity: float
+    utilization_percentage: float
+    is_full: bool
+    material_id: Optional[str]
+    
+class RakeUtilizationAnalysis(BaseModel):
+    rake_id: str
+    rake_number: str
+    total_wagons: int
+    total_capacity: float
+    total_loaded: float
+    overall_utilization: float
+    is_optimally_loaded: bool
+    partial_wagons: List[str]
+    recommendations: List[str]
+
+class RouteOptimization(BaseModel):
+    origin: str
+    destination: str
+    route_options: List[Dict[str, Any]]
+    optimal_route: Dict[str, Any]
+    criteria: str  # "cost", "time", "distance", "emission"
+
+class CO2Analysis(BaseModel):
+    route_id: str
+    transport_mode: TransportMode
+    distance_km: float
+    load_tons: float
+    total_co2_kg: float
+    co2_per_ton_km: float
+    efficiency_rating: str  # "excellent", "good", "average", "poor"
+
+class PenaltyAlert(BaseModel):
+    id: Optional[str] = None
+    order_id: str
+    customer_name: str
+    deadline: datetime
+    estimated_delivery: datetime
+    days_delayed: float
+    penalty_amount: float
+    alert_level: str  # "upcoming", "warning", "critical"
+    mitigation_actions: List[str]
+
+class PenaltyAlertResponse(PenaltyAlert):
+    id: str
+
+class LoadingTimeOptimization(BaseModel):
+    loading_point_id: str
+    current_avg_time_hours: float
+    optimal_time_hours: float
+    efficiency_gain: float
+    bottlenecks: List[str]
+    recommendations: List[str]
+
+# 1. WAGON UTILIZATION MAXIMIZATION
+@api_router.post("/wagon-utilization/analyze")
+async def analyze_wagon_utilization(rake_data: Dict[str, Any]):
+    """Analyze wagon utilization and ensure no partial loading"""
+    try:
+        rake_id = rake_data.get('rake_id')
+        order_ids = rake_data.get('order_ids', [])
+        
+        # Fetch rake details
+        rake = await db.rakes.find_one({'_id': ObjectId(rake_id)})
+        if not rake:
+            raise HTTPException(status_code=404, detail="Rake not found")
+        
+        rake = obj_to_dict(rake)
+        
+        # Analyze each wagon
+        wagon_utilizations = []
+        partial_wagons = []
+        total_capacity = 0
+        total_loaded = 0
+        
+        for wagon_id in rake['wagon_ids']:
+            wagon = await db.wagons.find_one({'_id': ObjectId(wagon_id)})
+            if wagon:
+                wagon = obj_to_dict(wagon)
+                capacity = wagon['capacity']
+                # Simulate loaded quantity (in production, fetch from actual loading data)
+                loaded = random.uniform(capacity * 0.7, capacity)
+                utilization = (loaded / capacity) * 100
+                
+                total_capacity += capacity
+                total_loaded += loaded
+                
+                util = WagonUtilization(
+                    wagon_id=wagon_id,
+                    capacity=capacity,
+                    loaded_quantity=loaded,
+                    utilization_percentage=utilization,
+                    is_full=(utilization >= 95),
+                    material_id=None
+                )
+                wagon_utilizations.append(util)
+                
+                if utilization < 95:
+                    partial_wagons.append(wagon_id)
+        
+        overall_utilization = (total_loaded / total_capacity * 100) if total_capacity > 0 else 0
+        is_optimal = len(partial_wagons) == 0 and overall_utilization >= 95
+        
+        recommendations = []
+        if not is_optimal:
+            recommendations.append(f"Optimize loading to fill {len(partial_wagons)} partially loaded wagons")
+            recommendations.append("Consider redistributing materials across wagons for maximum utilization")
+            recommendations.append("Ensure wagon capacity matches order quantities to avoid partial loads")
+        
+        analysis = RakeUtilizationAnalysis(
+            rake_id=rake_id,
+            rake_number=rake['rake_number'],
+            total_wagons=len(rake['wagon_ids']),
+            total_capacity=total_capacity,
+            total_loaded=total_loaded,
+            overall_utilization=overall_utilization,
+            is_optimally_loaded=is_optimal,
+            partial_wagons=partial_wagons,
+            recommendations=recommendations
+        )
+        
+        return analysis
+        
+    except Exception as e:
+        logger.error(f"Wagon utilization analysis error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/wagon-utilization/optimize")
+async def optimize_wagon_loading(optimization_request: Dict[str, Any]):
+    """Optimize wagon loading to maximize utilization and eliminate partial loads"""
+    try:
+        order_ids = optimization_request.get('order_ids', [])
+        
+        # Fetch orders
+        orders = []
+        total_quantity = 0
+        for order_id in order_ids:
+            order = await db.orders.find_one({'_id': ObjectId(order_id)})
+            if order:
+                order = obj_to_dict(order)
+                orders.append(order)
+                total_quantity += order['quantity']
+        
+        # Fetch available wagons
+        wagons = await db.wagons.find({'status': 'available'}).to_list(1000)
+        wagons = [obj_to_dict(w) for w in wagons]
+        
+        # Sort wagons by capacity
+        wagons.sort(key=lambda x: x['capacity'], reverse=True)
+        
+        # Optimize allocation
+        allocated_wagons = []
+        remaining_quantity = total_quantity
+        
+        for wagon in wagons:
+            if remaining_quantity <= 0:
+                break
+            
+            load_quantity = min(wagon['capacity'], remaining_quantity)
+            allocated_wagons.append({
+                'wagon_id': wagon['id'],
+                'wagon_number': wagon['wagon_number'],
+                'capacity': wagon['capacity'],
+                'allocated_load': load_quantity,
+                'utilization': (load_quantity / wagon['capacity']) * 100
+            })
+            remaining_quantity -= load_quantity
+        
+        # Calculate optimization metrics
+        total_wagons_used = len(allocated_wagons)
+        avg_utilization = sum(w['utilization'] for w in allocated_wagons) / total_wagons_used if total_wagons_used > 0 else 0
+        full_wagons = len([w for w in allocated_wagons if w['utilization'] >= 95])
+        
+        return {
+            'total_quantity': total_quantity,
+            'wagons_allocated': total_wagons_used,
+            'average_utilization': avg_utilization,
+            'full_wagons': full_wagons,
+            'partial_wagons': total_wagons_used - full_wagons,
+            'wagon_allocations': allocated_wagons,
+            'remaining_quantity': remaining_quantity,
+            'optimization_score': avg_utilization
+        }
+        
+    except Exception as e:
+        logger.error(f"Wagon optimization error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# 2. REAL-TIME DEMURRAGE TRACKING & ALERTS
+@api_router.get("/demurrage/active-alerts", response_model=List[DemurrageAlertResponse])
+async def get_active_demurrage_alerts():
+    """Get all active demurrage alerts"""
+    try:
+        alerts = []
+        
+        # Find all rakes that are currently loading
+        loading_rakes = await db.rakes.find({'status': 'loading'}).to_list(1000)
+        
+        for rake in loading_rakes:
+            rake = obj_to_dict(rake)
+            
+            # Calculate demurrage time
+            formation_time = rake.get('formation_date', datetime.utcnow())
+            if isinstance(formation_time, str):
+                formation_time = datetime.fromisoformat(formation_time)
+            
+            duration_hours = (datetime.utcnow() - formation_time).total_seconds() / 3600
+            cost_per_hour = 2000  # ₹2000 per hour demurrage
+            total_cost = duration_hours * cost_per_hour
+            
+            # Determine alert level
+            if duration_hours > 48:
+                alert_level = "severe"
+            elif duration_hours > 24:
+                alert_level = "critical"
+            elif duration_hours > 12:
+                alert_level = "warning"
+            else:
+                continue  # No alert needed
+            
+            loading_point = await db.loading_points.find_one({'_id': ObjectId(rake['loading_point_id'])})
+            
+            alert = DemurrageAlertResponse(
+                id=str(ObjectId()),
+                rake_id=rake['id'],
+                loading_point_id=rake['loading_point_id'],
+                start_time=formation_time,
+                current_duration_hours=duration_hours,
+                cost_per_hour=cost_per_hour,
+                total_demurrage_cost=total_cost,
+                alert_level=alert_level,
+                estimated_completion=datetime.utcnow() + timedelta(hours=4),
+                rake_number=rake['rake_number'],
+                loading_point_name=loading_point['name'] if loading_point else None
+            )
+            alerts.append(alert)
+        
+        # Sort by severity and cost
+        alerts.sort(key=lambda x: (x.alert_level == "severe", x.alert_level == "critical", x.total_demurrage_cost), reverse=True)
+        
+        return alerts
+        
+    except Exception as e:
+        logger.error(f"Demurrage alerts error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/demurrage/total-cost")
+async def get_total_demurrage_cost():
+    """Calculate total demurrage cost across all active rakes"""
+    try:
+        loading_rakes = await db.rakes.find({'status': 'loading'}).to_list(1000)
+        
+        total_cost = 0
+        rake_costs = []
+        
+        for rake in loading_rakes:
+            rake = obj_to_dict(rake)
+            formation_time = rake.get('formation_date', datetime.utcnow())
+            if isinstance(formation_time, str):
+                formation_time = datetime.fromisoformat(formation_time)
+            
+            duration_hours = (datetime.utcnow() - formation_time).total_seconds() / 3600
+            cost = duration_hours * 2000
+            total_cost += cost
+            
+            rake_costs.append({
+                'rake_id': rake['id'],
+                'rake_number': rake['rake_number'],
+                'duration_hours': duration_hours,
+                'demurrage_cost': cost
+            })
+        
+        return {
+            'timestamp': datetime.utcnow(),
+            'total_demurrage_cost': total_cost,
+            'active_loading_rakes': len(loading_rakes),
+            'rake_breakdown': rake_costs
+        }
+        
+    except Exception as e:
+        logger.error(f"Demurrage cost calculation error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# 3. FREIGHT RATE COMPARISON (RAIL VS ROAD)
+@api_router.post("/freight-rates", response_model=FreightRateResponse)
+async def create_freight_rate(rate: FreightRate):
+    """Add new freight rate"""
+    rate_dict = rate.dict(exclude={'id'})
+    result = await db.freight_rates.insert_one(rate_dict)
+    
+    rate_dict['id'] = str(result.inserted_id)
+    rate_dict['total_cost_estimate'] = (rate_dict['cost_per_ton_km'] * rate_dict['distance_km'] + 
+                                         rate_dict['base_cost'] + rate_dict['fuel_surcharge'])
+    return FreightRateResponse(**rate_dict)
+
+@api_router.get("/freight-rates/compare")
+async def compare_freight_rates(origin: str, destination: str, weight_tons: float):
+    """Compare rail vs road freight rates"""
+    try:
+        # Fetch rates for both modes
+        rail_rates = await db.freight_rates.find({
+            'transport_mode': 'rail',
+            'origin': origin,
+            'destination': destination
+        }).to_list(100)
+        
+        road_rates = await db.freight_rates.find({
+            'transport_mode': 'road',
+            'origin': origin,
+            'destination': destination
+        }).to_list(100)
+        
+        # If no rates found, create simulated rates
+        if not rail_rates:
+            distance_km = 500 + (hash(origin + destination) % 1000)
+            rail_rates = [{
+                'transport_mode': 'rail',
+                'origin': origin,
+                'destination': destination,
+                'cost_per_ton_km': 4.5,
+                'base_cost': 5000,
+                'fuel_surcharge': 1000,
+                'distance_km': distance_km,
+                'avg_transit_days': distance_km / 400,
+                'reliability_score': 0.92,
+                'co2_emission_kg_per_ton_km': 0.03
+            }]
+        
+        if not road_rates:
+            distance_km = 500 + (hash(origin + destination) % 1000)
+            road_rates = [{
+                'transport_mode': 'road',
+                'origin': origin,
+                'destination': destination,
+                'cost_per_ton_km': 6.5,
+                'base_cost': 3000,
+                'fuel_surcharge': 1500,
+                'distance_km': distance_km,
+                'avg_transit_days': distance_km / 500,
+                'reliability_score': 0.88,
+                'co2_emission_kg_per_ton_km': 0.08
+            }]
+        
+        # Calculate costs for each mode
+        def calculate_total_cost(rate, weight):
+            rate = obj_to_dict(rate) if '_id' in rate else rate
+            return (rate['cost_per_ton_km'] * rate['distance_km'] * weight + 
+                    rate['base_cost'] + rate['fuel_surcharge'])
+        
+        rail_cost = calculate_total_cost(rail_rates[0], weight_tons) if rail_rates else float('inf')
+        road_cost = calculate_total_cost(road_rates[0], weight_tons) if road_rates else float('inf')
+        
+        rail_rate = obj_to_dict(rail_rates[0]) if rail_rates and '_id' in rail_rates[0] else rail_rates[0]
+        road_rate = obj_to_dict(road_rates[0]) if road_rates and '_id' in road_rates[0] else road_rates[0]
+        
+        # Calculate CO2 emissions
+        rail_co2 = rail_rate['co2_emission_kg_per_ton_km'] * rail_rate['distance_km'] * weight_tons
+        road_co2 = road_rate['co2_emission_kg_per_ton_km'] * road_rate['distance_km'] * weight_tons
+        
+        comparison = {
+            'origin': origin,
+            'destination': destination,
+            'weight_tons': weight_tons,
+            'rail': {
+                'total_cost': rail_cost,
+                'cost_per_ton': rail_cost / weight_tons,
+                'transit_days': rail_rate['avg_transit_days'],
+                'reliability_score': rail_rate['reliability_score'],
+                'co2_emissions_kg': rail_co2,
+                'distance_km': rail_rate['distance_km']
+            },
+            'road': {
+                'total_cost': road_cost,
+                'cost_per_ton': road_cost / weight_tons,
+                'transit_days': road_rate['avg_transit_days'],
+                'reliability_score': road_rate['reliability_score'],
+                'co2_emissions_kg': road_co2,
+                'distance_km': road_rate['distance_km']
+            },
+            'recommendation': 'rail' if rail_cost < road_cost else 'road',
+            'cost_savings': abs(rail_cost - road_cost),
+            'co2_savings': abs(rail_co2 - road_co2),
+            'savings_percentage': (abs(rail_cost - road_cost) / max(rail_cost, road_cost)) * 100
+        }
+        
+        return comparison
+        
+    except Exception as e:
+        logger.error(f"Freight comparison error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# 4. COMBINED RAIL-ROAD OPTIMIZATION
+@api_router.post("/transport/multimodal-optimization")
+async def optimize_multimodal_transport(request: Dict[str, Any]):
+    """Optimize combined rail-road transport"""
+    try:
+        origin = request.get('origin')
+        destination = request.get('destination')
+        weight_tons = request.get('weight_tons')
+        order_ids = request.get('order_ids', [])
+        
+        # Fetch rail network data
+        rail_routes = await db.routes.find({'origin': origin, 'is_active': True}).to_list(100)
+        
+        multimodal_options = []
+        
+        # Option 1: Pure Rail
+        rail_comparison = await compare_freight_rates(origin, destination, weight_tons)
+        if 'rail' in rail_comparison:
+            multimodal_options.append({
+                'mode': 'pure_rail',
+                'route': f"{origin} → {destination}",
+                'segments': [{'type': 'rail', 'from': origin, 'to': destination}],
+                'total_cost': rail_comparison['rail']['total_cost'],
+                'transit_days': rail_comparison['rail']['transit_days'],
+                'co2_emissions': rail_comparison['rail']['co2_emissions_kg'],
+                'reliability': rail_comparison['rail']['reliability_score']
+            })
+        
+        # Option 2: Pure Road
+        if 'road' in rail_comparison:
+            multimodal_options.append({
+                'mode': 'pure_road',
+                'route': f"{origin} → {destination}",
+                'segments': [{'type': 'road', 'from': origin, 'to': destination}],
+                'total_cost': rail_comparison['road']['total_cost'],
+                'transit_days': rail_comparison['road']['transit_days'],
+                'co2_emissions': rail_comparison['road']['co2_emissions_kg'],
+                'reliability': rail_comparison['road']['reliability_score']
+            })
+        
+        # Option 3: Combined Rail-Road (if intermediate hubs exist)
+        # Simulate intermediate hub
+        intermediate_hub = f"Hub_{hash(origin) % 5}"
+        
+        # Calculate costs for combined mode
+        rail_leg_distance = 300 + (hash(origin) % 500)
+        road_leg_distance = 200 + (hash(destination) % 300)
+        
+        rail_leg_cost = 4.5 * rail_leg_distance * weight_tons + 5000 + 1000
+        road_leg_cost = 6.5 * road_leg_distance * weight_tons + 3000 + 1500
+        combined_cost = rail_leg_cost + road_leg_cost + 2000  # +₹2000 for handling
+        
+        multimodal_options.append({
+            'mode': 'combined_rail_road',
+            'route': f"{origin} → {intermediate_hub} → {destination}",
+            'segments': [
+                {'type': 'rail', 'from': origin, 'to': intermediate_hub, 'distance_km': rail_leg_distance},
+                {'type': 'road', 'from': intermediate_hub, 'to': destination, 'distance_km': road_leg_distance}
+            ],
+            'total_cost': combined_cost,
+            'transit_days': (rail_leg_distance / 400) + (road_leg_distance / 500),
+            'co2_emissions': (0.03 * rail_leg_distance * weight_tons) + (0.08 * road_leg_distance * weight_tons),
+            'reliability': 0.85,
+            'handling_cost': 2000
+        })
+        
+        # Sort by total cost
+        multimodal_options.sort(key=lambda x: x['total_cost'])
+        
+        optimal_option = multimodal_options[0] if multimodal_options else None
+        
+        return {
+            'origin': origin,
+            'destination': destination,
+            'weight_tons': weight_tons,
+            'options': multimodal_options,
+            'optimal_option': optimal_option,
+            'recommendation': f"Use {optimal_option['mode']} for optimal cost-efficiency" if optimal_option else "No viable options"
+        }
+        
+    except Exception as e:
+        logger.error(f"Multimodal optimization error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # WebSocket for Real-time Updates
 websocket_connections = []
 
