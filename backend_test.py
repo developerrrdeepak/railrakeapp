@@ -1,18 +1,17 @@
 #!/usr/bin/env python3
 """
-Comprehensive Backend Testing for 16 New Advanced Features
-Tests Cost & Efficiency Optimization and AI & ML Intelligence endpoints
+Comprehensive Backend Testing for Rake Formation API - Operational & Real-Time Features
+Testing all newly implemented operational features as specified in the review request.
 """
 
 import requests
 import json
-import asyncio
-import websockets
+import sys
 from datetime import datetime, timedelta
+from typing import Dict, List, Any
 import random
-import time
 
-# Backend URL from environment
+# Backend URL from frontend .env
 BACKEND_URL = "https://rail-analytics-hub.preview.emergentagent.com/api"
 
 class AdvancedBackendTester:
