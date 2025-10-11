@@ -2907,6 +2907,923 @@ Return JSON format with recommendations and scores for each objective.
         logger.error(f"Prescriptive optimization error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# =====================================================
+# OPERATIONAL & REAL-TIME FEATURES
+# =====================================================
+
+# Models for IoT Sensors
+class IoTSensorData(BaseModel):
+    id: Optional[str] = None
+    sensor_id: str
+    loading_point_id: str
+    sensor_type: str  # temperature, weight, vibration, load_status
+    value: float
+    unit: str
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    status: str = "normal"  # normal, warning, critical
+    
+class IoTSensorResponse(IoTSensorData):
+    id: str
+    loading_point_name: Optional[str] = None
+
+# Models for Weighbridge
+class WeighbridgeReading(BaseModel):
+    id: Optional[str] = None
+    wagon_id: str
+    weighbridge_id: str
+    gross_weight: float
+    tare_weight: float
+    net_weight: float
+    expected_weight: float
+    variance_percentage: float
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    status: str  # verified, overload, underload, suspicious
+    operator_id: Optional[str] = None
+    
+class WeighbridgeResponse(WeighbridgeReading):
+    id: str
+    wagon_number: Optional[str] = None
+
+# Models for GPS Tracking Enhancement
+class GPSRouteProgress(BaseModel):
+    id: Optional[str] = None
+    rake_id: str
+    current_location: Dict[str, float]  # {"lat": 0.0, "lng": 0.0}
+    route_name: str
+    total_distance_km: float
+    distance_covered_km: float
+    progress_percentage: float
+    estimated_time_remaining_hours: float
+    average_speed_kmh: float
+    last_checkpoint: str
+    next_checkpoint: str
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    
+class GPSRouteProgressResponse(GPSRouteProgress):
+    id: str
+    rake_number: Optional[str] = None
+
+# Models for Smart Alerts
+class AlertChannel(str, Enum):
+    SMS = "sms"
+    EMAIL = "email"
+    APP = "app"
+    ALL = "all"
+
+class AlertPriority(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+class SmartAlert(BaseModel):
+    id: Optional[str] = None
+    alert_type: str  # delay, maintenance, overload, idle_rake, route_closure
+    entity_type: str  # rake, wagon, order, loading_point
+    entity_id: str
+    priority: AlertPriority
+    title: str
+    message: str
+    channels: List[AlertChannel]
+    recipients: List[str]  # phone numbers or email addresses
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    sent_at: Optional[datetime] = None
+    acknowledged_at: Optional[datetime] = None
+    acknowledged_by: Optional[str] = None
+    status: str = "pending"  # pending, sent, acknowledged, resolved
+    
+class SmartAlertResponse(SmartAlert):
+    id: str
+
+# Models for Idle Rake Detection
+class IdleRakeDetection(BaseModel):
+    id: Optional[str] = None
+    rake_id: str
+    idle_since: datetime
+    idle_duration_hours: float
+    location: str
+    last_activity: str
+    estimated_demurrage_cost: float
+    rescheduling_suggestions: List[Dict[str, Any]]
+    status: str = "detected"  # detected, notified, rescheduled, resolved
+    
+class IdleRakeResponse(IdleRakeDetection):
+    id: str
+    rake_number: Optional[str] = None
+
+# Models for Predictive Maintenance
+class MaintenanceAlert(BaseModel):
+    id: Optional[str] = None
+    entity_type: str  # wagon, loading_point, track
+    entity_id: str
+    maintenance_type: str  # scheduled, predictive, emergency
+    component: str  # wheels, brakes, coupling, loading_equipment
+    predicted_failure_date: datetime
+    confidence_score: float
+    severity: str  # low, medium, high, critical
+    recommended_action: str
+    estimated_cost: float
+    estimated_downtime_hours: float
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    scheduled_date: Optional[datetime] = None
+    status: str = "pending"  # pending, scheduled, in_progress, completed
+    
+class MaintenanceAlertResponse(MaintenanceAlert):
+    id: str
+    entity_name: Optional[str] = None
+
+# Models for Auto Rescheduling
+class RouteDisruption(BaseModel):
+    id: Optional[str] = None
+    route_id: str
+    disruption_type: str  # closure, delay, weather, accident
+    severity: str  # minor, moderate, severe
+    start_time: datetime
+    estimated_end_time: Optional[datetime] = None
+    affected_section: str
+    description: str
+    alternative_routes: List[str]
+    
+class ReschedulingRequest(BaseModel):
+    rake_id: str
+    reason: str  # route_closure, delay, emergency
+    preferred_date: Optional[datetime] = None
+    
+class ReschedulingResult(BaseModel):
+    rake_id: str
+    original_schedule: Dict[str, Any]
+    new_schedule: Dict[str, Any]
+    alternative_routes: List[Dict[str, Any]]
+    cost_impact: float
+    time_impact_hours: float
+    recommendation: str
+
+# Models for Collaboration Panel
+class CollaborationMessage(BaseModel):
+    id: Optional[str] = None
+    team: str  # plant, rail, marketing, operations
+    user_id: str
+    user_name: str
+    message: str
+    related_entity_type: Optional[str] = None  # rake, order, wagon
+    related_entity_id: Optional[str] = None
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    is_urgent: bool = False
+    attachments: List[str] = []
+    
+class CollaborationMessageResponse(CollaborationMessage):
+    id: str
+
+# Models for Historical Data Archive
+class ArchiveQuery(BaseModel):
+    entity_type: str  # rakes, orders, wagons, alerts
+    start_date: datetime
+    end_date: datetime
+    filters: Optional[Dict[str, Any]] = None
+    limit: int = 1000
+
+# =====================================================
+# IOT SENSORS INTEGRATION
+# =====================================================
+
+@api_router.post("/iot/sensors", response_model=IoTSensorResponse)
+async def create_iot_sensor_data(sensor_data: IoTSensorData):
+    """Receive and store IoT sensor data from loading points"""
+    try:
+        sensor_dict = sensor_data.dict(exclude={'id'})
+        result = await db.iot_sensors.insert_one(sensor_dict)
+        
+        sensor_obj = await db.iot_sensors.find_one({'_id': result.inserted_id})
+        sensor_obj = obj_to_dict(sensor_obj)
+        
+        loading_point = await db.loading_points.find_one({'_id': ObjectId(sensor_obj['loading_point_id'])})
+        sensor_obj['loading_point_name'] = loading_point['name'] if loading_point else None
+        
+        # Create alert if status is critical
+        if sensor_data.status in ["warning", "critical"]:
+            alert = SmartAlert(
+                alert_type="iot_sensor",
+                entity_type="loading_point",
+                entity_id=sensor_data.loading_point_id,
+                priority=AlertPriority.HIGH if sensor_data.status == "critical" else AlertPriority.MEDIUM,
+                title=f"{sensor_data.sensor_type.upper()} Alert",
+                message=f"Sensor {sensor_data.sensor_id} reading: {sensor_data.value} {sensor_data.unit} - Status: {sensor_data.status}",
+                channels=[AlertChannel.APP, AlertChannel.EMAIL],
+                recipients=["operations@plant.com"]
+            )
+            await db.smart_alerts.insert_one(alert.dict(exclude={'id'}))
+        
+        return IoTSensorResponse(**sensor_obj)
+    except Exception as e:
+        logger.error(f"IoT sensor error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/iot/sensors/real-time")
+async def get_real_time_iot_data(loading_point_id: Optional[str] = None):
+    """Get real-time IoT sensor data from all or specific loading points"""
+    try:
+        query = {}
+        if loading_point_id:
+            query['loading_point_id'] = loading_point_id
+        
+        # Get latest readings from last 5 minutes
+        five_minutes_ago = datetime.utcnow() - timedelta(minutes=5)
+        query['timestamp'] = {'$gte': five_minutes_ago}
+        
+        sensors = await db.iot_sensors.find(query).sort('timestamp', -1).to_list(1000)
+        result = []
+        
+        for sensor in sensors:
+            sensor = obj_to_dict(sensor)
+            loading_point = await db.loading_points.find_one({'_id': ObjectId(sensor['loading_point_id'])})
+            sensor['loading_point_name'] = loading_point['name'] if loading_point else None
+            result.append(IoTSensorResponse(**sensor))
+        
+        return {
+            "timestamp": datetime.utcnow(),
+            "sensor_count": len(result),
+            "sensors": result
+        }
+    except Exception as e:
+        logger.error(f"Real-time IoT data error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# =====================================================
+# SMART WEIGHBRIDGE INTEGRATION
+# =====================================================
+
+@api_router.post("/weighbridge/reading", response_model=WeighbridgeResponse)
+async def create_weighbridge_reading(reading: WeighbridgeReading):
+    """Record weighbridge reading and verify wagon weight"""
+    try:
+        reading_dict = reading.dict(exclude={'id'})
+        result = await db.weighbridge_readings.insert_one(reading_dict)
+        
+        reading_obj = await db.weighbridge_readings.find_one({'_id': result.inserted_id})
+        reading_obj = obj_to_dict(reading_obj)
+        
+        wagon = await db.wagons.find_one({'_id': ObjectId(reading_obj['wagon_id'])})
+        reading_obj['wagon_number'] = wagon['wagon_number'] if wagon else None
+        
+        # Create alert if overload or suspicious
+        if reading.status in ["overload", "suspicious"]:
+            alert = SmartAlert(
+                alert_type="weighbridge",
+                entity_type="wagon",
+                entity_id=reading.wagon_id,
+                priority=AlertPriority.CRITICAL if reading.status == "overload" else AlertPriority.HIGH,
+                title=f"Weight Verification {reading.status.upper()}",
+                message=f"Wagon {wagon['wagon_number'] if wagon else reading.wagon_id}: Net weight {reading.net_weight}kg, Expected {reading.expected_weight}kg, Variance {reading.variance_percentage}%",
+                channels=[AlertChannel.ALL],
+                recipients=["operations@plant.com", "+919876543210"]
+            )
+            await db.smart_alerts.insert_one(alert.dict(exclude={'id'}))
+        
+        return WeighbridgeResponse(**reading_obj)
+    except Exception as e:
+        logger.error(f"Weighbridge reading error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/weighbridge/readings")
+async def get_weighbridge_readings(wagon_id: Optional[str] = None, status: Optional[str] = None):
+    """Get weighbridge readings with optional filters"""
+    try:
+        query = {}
+        if wagon_id:
+            query['wagon_id'] = wagon_id
+        if status:
+            query['status'] = status
+        
+        readings = await db.weighbridge_readings.find(query).sort('timestamp', -1).to_list(100)
+        result = []
+        
+        for reading in readings:
+            reading = obj_to_dict(reading)
+            wagon = await db.wagons.find_one({'_id': ObjectId(reading['wagon_id'])})
+            reading['wagon_number'] = wagon['wagon_number'] if wagon else None
+            result.append(WeighbridgeResponse(**reading))
+        
+        return result
+    except Exception as e:
+        logger.error(f"Get weighbridge readings error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# =====================================================
+# GPS TRACKING ENHANCEMENT
+# =====================================================
+
+@api_router.post("/gps/route-progress", response_model=GPSRouteProgressResponse)
+async def update_gps_route_progress(progress: GPSRouteProgress):
+    """Update GPS tracking with route progress information"""
+    try:
+        progress_dict = progress.dict(exclude={'id'})
+        result = await db.gps_route_progress.insert_one(progress_dict)
+        
+        progress_obj = await db.gps_route_progress.find_one({'_id': result.inserted_id})
+        progress_obj = obj_to_dict(progress_obj)
+        
+        rake = await db.rakes.find_one({'_id': ObjectId(progress_obj['rake_id'])})
+        progress_obj['rake_number'] = rake['rake_number'] if rake else None
+        
+        return GPSRouteProgressResponse(**progress_obj)
+    except Exception as e:
+        logger.error(f"GPS route progress error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/gps/route-progress/{rake_id}")
+async def get_rake_route_progress(rake_id: str):
+    """Get latest route progress for a specific rake"""
+    try:
+        progress = await db.gps_route_progress.find_one(
+            {'rake_id': rake_id},
+            sort=[('timestamp', -1)]
+        )
+        
+        if not progress:
+            raise HTTPException(status_code=404, detail="No GPS data found for this rake")
+        
+        progress = obj_to_dict(progress)
+        rake = await db.rakes.find_one({'_id': ObjectId(progress['rake_id'])})
+        progress['rake_number'] = rake['rake_number'] if rake else None
+        
+        return GPSRouteProgressResponse(**progress)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get route progress error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/gps/all-active-rakes")
+async def get_all_active_rakes_progress():
+    """Get GPS tracking for all active rakes"""
+    try:
+        # Get all active rakes
+        active_rakes = await db.rakes.find({'status': {'$in': ['loading', 'in_transit']}}).to_list(1000)
+        
+        results = []
+        for rake in active_rakes:
+            rake = obj_to_dict(rake)
+            # Get latest GPS progress
+            progress = await db.gps_route_progress.find_one(
+                {'rake_id': rake['id']},
+                sort=[('timestamp', -1)]
+            )
+            
+            if progress:
+                progress = obj_to_dict(progress)
+                progress['rake_number'] = rake['rake_number']
+                results.append(progress)
+        
+        return {
+            "timestamp": datetime.utcnow(),
+            "active_rakes_count": len(results),
+            "tracking_data": results
+        }
+    except Exception as e:
+        logger.error(f"Get all active rakes error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# =====================================================
+# SMART ALERT SYSTEM
+# =====================================================
+
+@api_router.post("/alerts", response_model=SmartAlertResponse)
+async def create_smart_alert(alert: SmartAlert):
+    """Create a new smart alert"""
+    try:
+        alert_dict = alert.dict(exclude={'id'})
+        result = await db.smart_alerts.insert_one(alert_dict)
+        alert_dict['id'] = str(result.inserted_id)
+        
+        # Simulate sending alert (in production, integrate with SMS/Email services)
+        await db.smart_alerts.update_one(
+            {'_id': result.inserted_id},
+            {'$set': {'sent_at': datetime.utcnow(), 'status': 'sent'}}
+        )
+        
+        return SmartAlertResponse(**alert_dict)
+    except Exception as e:
+        logger.error(f"Create alert error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/alerts")
+async def get_smart_alerts(priority: Optional[str] = None, status: Optional[str] = None):
+    """Get all alerts with optional filters"""
+    try:
+        query = {}
+        if priority:
+            query['priority'] = priority
+        if status:
+            query['status'] = status
+        
+        alerts = await db.smart_alerts.find(query).sort('created_at', -1).to_list(500)
+        return [SmartAlertResponse(**obj_to_dict(alert)) for alert in alerts]
+    except Exception as e:
+        logger.error(f"Get alerts error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.put("/alerts/{alert_id}/acknowledge")
+async def acknowledge_alert(alert_id: str, user_id: str):
+    """Acknowledge an alert"""
+    try:
+        await db.smart_alerts.update_one(
+            {'_id': ObjectId(alert_id)},
+            {'$set': {
+                'acknowledged_at': datetime.utcnow(),
+                'acknowledged_by': user_id,
+                'status': 'acknowledged'
+            }}
+        )
+        
+        alert = await db.smart_alerts.find_one({'_id': ObjectId(alert_id)})
+        return obj_to_dict(alert) if alert else None
+    except Exception as e:
+        logger.error(f"Acknowledge alert error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# =====================================================
+# IDLE RAKE DETECTION & RESCHEDULING
+# =====================================================
+
+@api_router.get("/idle-rakes/detect")
+async def detect_idle_rakes():
+    """Detect idle rakes and provide rescheduling suggestions"""
+    try:
+        # Get all rakes that haven't moved in 24+ hours
+        threshold_time = datetime.utcnow() - timedelta(hours=24)
+        
+        # Get rakes in 'planned' or 'loading' status for long time
+        rakes = await db.rakes.find({
+            'status': {'$in': ['planned', 'loading']},
+            'formation_date': {'$lte': threshold_time}
+        }).to_list(100)
+        
+        idle_detections = []
+        
+        for rake in rakes:
+            rake = obj_to_dict(rake)
+            idle_duration = (datetime.utcnow() - rake['formation_date']).total_seconds() / 3600
+            
+            # Calculate estimated demurrage
+            estimated_demurrage = idle_duration * 2000 * len(rake['wagon_ids'])  # ₹2000/hr per wagon
+            
+            # Get AI suggestions for rescheduling
+            prompt = f"""
+            Rake {rake['rake_number']} has been idle for {idle_duration:.1f} hours.
+            Status: {rake['status']}
+            Orders: {rake['order_ids']}
+            Current estimated demurrage: ₹{estimated_demurrage:,.0f}
+            
+            Provide 3 rescheduling suggestions to minimize demurrage and improve efficiency.
+            """
+            
+            llm_chat = LlmChat(
+                api_key=os.environ['EMERGENT_LLM_KEY'],
+                session_id=f"idle_rake_{rake['id']}",
+                system_message="You are a logistics rescheduling expert."
+            ).with_model("openai", "gpt-4o")
+            
+            response = await llm_chat.send_message(UserMessage(text=prompt))
+            
+            idle_detection = {
+                'rake_id': rake['id'],
+                'rake_number': rake['rake_number'],
+                'idle_since': rake['formation_date'],
+                'idle_duration_hours': idle_duration,
+                'location': rake.get('loading_point_id', 'Unknown'),
+                'last_activity': rake['status'],
+                'estimated_demurrage_cost': estimated_demurrage,
+                'rescheduling_suggestions': [{'suggestion': response}],
+                'status': 'detected'
+            }
+            
+            # Save to database
+            result = await db.idle_rake_detections.insert_one(idle_detection)
+            idle_detection['id'] = str(result.inserted_id)
+            
+            idle_detections.append(idle_detection)
+            
+            # Create alert
+            alert = SmartAlert(
+                alert_type="idle_rake",
+                entity_type="rake",
+                entity_id=rake['id'],
+                priority=AlertPriority.HIGH,
+                title=f"Idle Rake Detected: {rake['rake_number']}",
+                message=f"Rake has been idle for {idle_duration:.1f} hours. Demurrage: ₹{estimated_demurrage:,.0f}",
+                channels=[AlertChannel.APP, AlertChannel.EMAIL],
+                recipients=["operations@plant.com"]
+            )
+            await db.smart_alerts.insert_one(alert.dict(exclude={'id'}))
+        
+        return {
+            "timestamp": datetime.utcnow(),
+            "idle_rakes_count": len(idle_detections),
+            "total_demurrage_cost": sum(d['estimated_demurrage_cost'] for d in idle_detections),
+            "idle_rakes": idle_detections
+        }
+    except Exception as e:
+        logger.error(f"Idle rake detection error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/idle-rakes")
+async def get_idle_rakes():
+    """Get all detected idle rakes"""
+    try:
+        detections = await db.idle_rake_detections.find({'status': {'$ne': 'resolved'}}).sort('idle_duration_hours', -1).to_list(100)
+        return [obj_to_dict(d) for d in detections]
+    except Exception as e:
+        logger.error(f"Get idle rakes error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# =====================================================
+# PREDICTIVE MAINTENANCE ALERTS
+# =====================================================
+
+@api_router.post("/maintenance/predict")
+async def predict_maintenance_needs():
+    """AI-based predictive maintenance analysis"""
+    try:
+        # Get all wagons and loading points
+        wagons = await db.wagons.find().to_list(1000)
+        loading_points = await db.loading_points.find().to_list(100)
+        
+        maintenance_alerts = []
+        
+        # Simulate predictive analysis for wagons
+        for wagon in wagons[:10]:  # Analyze first 10 wagons as example
+            wagon = obj_to_dict(wagon)
+            
+            # Get usage history (simulated)
+            usage_hours = random.uniform(5000, 15000)
+            
+            prompt = f"""
+            Analyze maintenance needs for Wagon {wagon['wagon_number']}:
+            - Type: {wagon['type']}
+            - Capacity: {wagon['capacity']} MT
+            - Current Status: {wagon['status']}
+            - Usage Hours: {usage_hours}
+            
+            Predict:
+            1. Components needing maintenance
+            2. Predicted failure date
+            3. Confidence score (0-1)
+            4. Recommended action
+            5. Estimated cost
+            6. Estimated downtime
+            
+            Return as JSON.
+            """
+            
+            llm_chat = LlmChat(
+                api_key=os.environ['EMERGENT_LLM_KEY'],
+                session_id=f"maint_pred_{wagon['id']}",
+                system_message="You are a predictive maintenance AI expert."
+            ).with_model("openai", "gpt-4o")
+            
+            response = await llm_chat.send_message(UserMessage(text=prompt))
+            
+            # Parse AI response
+            try:
+                response_text = response.strip()
+                if '```json' in response_text:
+                    response_text = response_text.split('```json')[1].split('```')[0].strip()
+                elif '```' in response_text:
+                    response_text = response_text.split('```')[1].split('```')[0].strip()
+                
+                prediction = json.loads(response_text)
+            except:
+                prediction = {
+                    'component': 'wheels',
+                    'predicted_failure_date': (datetime.utcnow() + timedelta(days=30)).isoformat(),
+                    'confidence_score': 0.75,
+                    'recommended_action': response,
+                    'estimated_cost': 50000,
+                    'estimated_downtime_hours': 8
+                }
+            
+            alert = MaintenanceAlert(
+                entity_type="wagon",
+                entity_id=wagon['id'],
+                maintenance_type="predictive",
+                component=prediction.get('component', 'wheels'),
+                predicted_failure_date=datetime.fromisoformat(prediction['predicted_failure_date'].replace('Z', '+00:00')) if isinstance(prediction.get('predicted_failure_date'), str) else datetime.utcnow() + timedelta(days=30),
+                confidence_score=prediction.get('confidence_score', 0.75),
+                severity="high" if prediction.get('confidence_score', 0) > 0.8 else "medium",
+                recommended_action=prediction.get('recommended_action', 'Schedule inspection'),
+                estimated_cost=prediction.get('estimated_cost', 50000),
+                estimated_downtime_hours=prediction.get('estimated_downtime_hours', 8)
+            )
+            
+            alert_dict = alert.dict(exclude={'id'})
+            alert_dict['entity_name'] = wagon['wagon_number']
+            result = await db.maintenance_alerts.insert_one(alert_dict)
+            alert_dict['id'] = str(result.inserted_id)
+            
+            maintenance_alerts.append(alert_dict)
+        
+        return {
+            "timestamp": datetime.utcnow(),
+            "predictions_count": len(maintenance_alerts),
+            "total_estimated_cost": sum(a['estimated_cost'] for a in maintenance_alerts),
+            "total_estimated_downtime": sum(a['estimated_downtime_hours'] for a in maintenance_alerts),
+            "maintenance_alerts": maintenance_alerts
+        }
+    except Exception as e:
+        logger.error(f"Predictive maintenance error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/maintenance/alerts")
+async def get_maintenance_alerts(severity: Optional[str] = None):
+    """Get all maintenance alerts"""
+    try:
+        query = {}
+        if severity:
+            query['severity'] = severity
+        
+        alerts = await db.maintenance_alerts.find(query).sort('predicted_failure_date', 1).to_list(500)
+        return [MaintenanceAlertResponse(**obj_to_dict(alert)) for alert in alerts]
+    except Exception as e:
+        logger.error(f"Get maintenance alerts error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# =====================================================
+# AUTO RESCHEDULING ENGINE
+# =====================================================
+
+@api_router.post("/rescheduling/auto-reschedule")
+async def auto_reschedule_rake(request: ReschedulingRequest):
+    """Automatically reschedule a rake due to disruptions"""
+    try:
+        # Get rake details
+        rake = await db.rakes.find_one({'_id': ObjectId(request.rake_id)})
+        if not rake:
+            raise HTTPException(status_code=404, detail="Rake not found")
+        
+        rake = obj_to_dict(rake)
+        
+        # Get available routes
+        routes = await db.routes.find({'is_active': True}).to_list(100)
+        routes_data = [obj_to_dict(r) for r in routes]
+        
+        # AI-powered rescheduling
+        prompt = f"""
+        Rake {rake['rake_number']} needs rescheduling due to: {request.reason}
+        
+        Current Schedule:
+        - Route: {rake['route']}
+        - Status: {rake['status']}
+        - Dispatch Date: {rake.get('dispatch_date', 'Not set')}
+        
+        Available Routes:
+        {json.dumps(routes_data, indent=2, default=str)}
+        
+        Provide:
+        1. New optimal schedule
+        2. Alternative routes (top 3)
+        3. Cost impact analysis
+        4. Time impact
+        5. Detailed recommendation
+        
+        Return as JSON with new_schedule, alternative_routes, cost_impact, time_impact_hours, recommendation.
+        """
+        
+        llm_chat = LlmChat(
+            api_key=os.environ['EMERGENT_LLM_KEY'],
+            session_id=f"reschedule_{request.rake_id}",
+            system_message="You are an expert in railway rescheduling and route optimization."
+        ).with_model("openai", "gpt-4o")
+        
+        response = await llm_chat.send_message(UserMessage(text=prompt))
+        
+        # Parse response
+        try:
+            response_text = response.strip()
+            if '```json' in response_text:
+                response_text = response_text.split('```json')[1].split('```')[0].strip()
+            elif '```' in response_text:
+                response_text = response_text.split('```')[1].split('```')[0].strip()
+            
+            rescheduling_result = json.loads(response_text)
+        except:
+            rescheduling_result = {
+                'new_schedule': {'dispatch_date': (datetime.utcnow() + timedelta(days=1)).isoformat()},
+                'alternative_routes': [],
+                'cost_impact': 0,
+                'time_impact_hours': 0,
+                'recommendation': response
+            }
+        
+        # Update rake with new schedule
+        if request.preferred_date:
+            new_dispatch = request.preferred_date
+        else:
+            new_dispatch = datetime.utcnow() + timedelta(days=1)
+        
+        await db.rakes.update_one(
+            {'_id': ObjectId(request.rake_id)},
+            {'$set': {
+                'dispatch_date': new_dispatch,
+                'status': 'rescheduled',
+                'rescheduling_reason': request.reason,
+                'rescheduled_at': datetime.utcnow()
+            }}
+        )
+        
+        # Create alert
+        alert = SmartAlert(
+            alert_type="rescheduling",
+            entity_type="rake",
+            entity_id=request.rake_id,
+            priority=AlertPriority.HIGH,
+            title=f"Rake {rake['rake_number']} Rescheduled",
+            message=f"Reason: {request.reason}. New dispatch: {new_dispatch.strftime('%Y-%m-%d %H:%M')}",
+            channels=[AlertChannel.ALL],
+            recipients=["operations@plant.com", "rail@plant.com"]
+        )
+        await db.smart_alerts.insert_one(alert.dict(exclude={'id'}))
+        
+        return ReschedulingResult(
+            rake_id=request.rake_id,
+            original_schedule={'dispatch_date': rake.get('dispatch_date')},
+            new_schedule=rescheduling_result.get('new_schedule', {}),
+            alternative_routes=rescheduling_result.get('alternative_routes', []),
+            cost_impact=rescheduling_result.get('cost_impact', 0),
+            time_impact_hours=rescheduling_result.get('time_impact_hours', 0),
+            recommendation=rescheduling_result.get('recommendation', '')
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Auto rescheduling error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/route-disruptions")
+async def report_route_disruption(disruption: RouteDisruption):
+    """Report a route disruption"""
+    try:
+        disruption_dict = disruption.dict(exclude={'id'})
+        result = await db.route_disruptions.insert_one(disruption_dict)
+        disruption_dict['id'] = str(result.inserted_id)
+        
+        # Find affected rakes on this route
+        route = await db.routes.find_one({'_id': ObjectId(disruption.route_id)})
+        if route:
+            route = obj_to_dict(route)
+            affected_rakes = await db.rakes.find({
+                'route': route['name'],
+                'status': {'$in': ['planned', 'loading', 'in_transit']}
+            }).to_list(100)
+            
+            # Create alerts for affected rakes
+            for rake in affected_rakes:
+                rake = obj_to_dict(rake)
+                alert = SmartAlert(
+                    alert_type="route_closure",
+                    entity_type="rake",
+                    entity_id=rake['id'],
+                    priority=AlertPriority.CRITICAL if disruption.severity == "severe" else AlertPriority.HIGH,
+                    title=f"Route Disruption: {disruption.disruption_type}",
+                    message=f"Route {route['name']} affected. Rake {rake['rake_number']} needs rescheduling. {disruption.description}",
+                    channels=[AlertChannel.ALL],
+                    recipients=["operations@plant.com", "rail@plant.com"]
+                )
+                await db.smart_alerts.insert_one(alert.dict(exclude={'id'}))
+        
+        return disruption_dict
+    except Exception as e:
+        logger.error(f"Route disruption error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# =====================================================
+# REAL-TIME COLLABORATION PANEL
+# =====================================================
+
+@api_router.post("/collaboration/message", response_model=CollaborationMessageResponse)
+async def post_collaboration_message(message: CollaborationMessage):
+    """Post a message to the collaboration panel"""
+    try:
+        message_dict = message.dict(exclude={'id'})
+        result = await db.collaboration_messages.insert_one(message_dict)
+        message_dict['id'] = str(result.inserted_id)
+        
+        # If urgent, create an alert
+        if message.is_urgent:
+            alert = SmartAlert(
+                alert_type="urgent_message",
+                entity_type="collaboration",
+                entity_id=str(result.inserted_id),
+                priority=AlertPriority.HIGH,
+                title=f"Urgent Message from {message.team.upper()}",
+                message=f"{message.user_name}: {message.message[:100]}...",
+                channels=[AlertChannel.APP],
+                recipients=["all_teams"]
+            )
+            await db.smart_alerts.insert_one(alert.dict(exclude={'id'}))
+        
+        return CollaborationMessageResponse(**message_dict)
+    except Exception as e:
+        logger.error(f"Collaboration message error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/collaboration/messages")
+async def get_collaboration_messages(
+    team: Optional[str] = None,
+    related_entity_id: Optional[str] = None,
+    limit: int = 100
+):
+    """Get collaboration messages with filters"""
+    try:
+        query = {}
+        if team:
+            query['team'] = team
+        if related_entity_id:
+            query['related_entity_id'] = related_entity_id
+        
+        messages = await db.collaboration_messages.find(query).sort('timestamp', -1).to_list(limit)
+        return [CollaborationMessageResponse(**obj_to_dict(msg)) for msg in messages]
+    except Exception as e:
+        logger.error(f"Get collaboration messages error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# =====================================================
+# HISTORICAL DATA ARCHIVE
+# =====================================================
+
+@api_router.post("/archive/query")
+async def query_historical_data(query: ArchiveQuery):
+    """Query historical archived data"""
+    try:
+        collection_map = {
+            'rakes': db.rakes,
+            'orders': db.orders,
+            'wagons': db.wagons,
+            'alerts': db.smart_alerts,
+            'weighbridge': db.weighbridge_readings,
+            'gps_tracking': db.gps_route_progress
+        }
+        
+        if query.entity_type not in collection_map:
+            raise HTTPException(status_code=400, detail=f"Invalid entity type: {query.entity_type}")
+        
+        collection = collection_map[query.entity_type]
+        
+        # Build query
+        db_query = {}
+        
+        # Date range filter
+        date_field = 'formation_date' if query.entity_type == 'rakes' else 'created_at' if query.entity_type == 'alerts' else 'timestamp'
+        db_query[date_field] = {
+            '$gte': query.start_date,
+            '$lte': query.end_date
+        }
+        
+        # Additional filters
+        if query.filters:
+            db_query.update(query.filters)
+        
+        # Execute query
+        results = await collection.find(db_query).sort(date_field, -1).to_list(query.limit)
+        
+        # Convert ObjectId to string
+        results = [obj_to_dict(r) for r in results]
+        
+        return {
+            "entity_type": query.entity_type,
+            "date_range": {
+                "start": query.start_date,
+                "end": query.end_date
+            },
+            "results_count": len(results),
+            "results": results
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Historical data query error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/archive/summary")
+async def get_archive_summary():
+    """Get summary of archived data"""
+    try:
+        summary = {
+            "total_rakes": await db.rakes.count_documents({}),
+            "total_orders": await db.orders.count_documents({}),
+            "total_wagons": await db.wagons.count_documents({}),
+            "total_alerts": await db.smart_alerts.count_documents({}),
+            "total_weighbridge_readings": await db.weighbridge_readings.count_documents({}),
+            "total_gps_tracking_records": await db.gps_route_progress.count_documents({}),
+            "oldest_record": datetime.utcnow() - timedelta(days=365),  # Simulated
+            "latest_record": datetime.utcnow(),
+            "data_size_gb": random.uniform(10, 100)  # Simulated
+        }
+        
+        return summary
+    except Exception as e:
+        logger.error(f"Archive summary error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @api_router.get("/")
 async def root():
     return {"message": "Advanced Rake Formation Control Room API is running"}
