@@ -1,229 +1,686 @@
-diff --git a/backend/server.py b/backend/server.py
-index 2a7e785..a1b6f1d 100644
---- a/backend/server.py
-+++ b/backend/server.py
-@@ -862,7 +862,15 @@ async def get_wagon_tracking():
-     result = []
-     for tracking in trackings:
-         tracking = obj_to_dict(tracking)
--        wagon = await db.wagons.find_one({'_id': ObjectId(tracking['wagon_id'])})
-+        # Try to find wagon by ObjectId first, then by wagon_number if that fails
-+        wagon = None
-+        try:
-+            wagon = await db.wagons.find_one({'_id': ObjectId(tracking['wagon_id'])})
-+        except:
-+            # If ObjectId fails, try to find by wagon_number (for string IDs like "001")
-+            wagon_number = f"W{tracking['wagon_id']}"
-+            wagon = await db.wagons.find_one({'wagon_number': wagon_number})
-+        
-         tracking['wagon_number'] = wagon['wagon_number'] if wagon else None
-         tracking['wagon_type'] = wagon['type'] if wagon else None
-         result.append(WagonTrackingResponse(**tracking))
-@@ -1142,12 +1150,16 @@ async def get_pending_approvals():
-         approval = obj_to_dict(approval)
-         # Get entity details
-         entity_details = None
--        if approval['entity_type'] == 'rake':
--            entity = await db.rakes.find_one({'_id': ObjectId(approval['entity_id'])})
--            entity_details = obj_to_dict(entity) if entity else None
--        elif approval['entity_type'] == 'order':
--            entity = await db.orders.find_one({'_id': ObjectId(approval['entity_id'])})
--            entity_details = obj_to_dict(entity) if entity else None
-+        try:
-+            if approval['entity_type'] == 'rake':
-+                entity = await db.rakes.find_one({'_id': ObjectId(approval['entity_id'])})
-+                entity_details = obj_to_dict(entity) if entity else None
-+            elif approval['entity_type'] == 'order':
-+                entity = await db.orders.find_one({'_id': ObjectId(approval['entity_id'])})
-+                entity_details = obj_to_dict(entity) if entity else None
-+        except:
-+            # If ObjectId is invalid, set entity_details to None
-+            entity_details = None
-             
-         approval['entity_details'] = entity_details
-         result.append(WorkflowApprovalResponse(**approval))
+diff --git a/model.patch b/model.patch
+index 196a514..e69de29 100644
+--- a/model.patch
++++ b/model.patch
+@@ -1,229 +0,0 @@
+-diff --git a/backend/server.py b/backend/server.py
+-index 2a7e785..a1b6f1d 100644
+---- a/backend/server.py
+-+++ b/backend/server.py
+-@@ -862,7 +862,15 @@ async def get_wagon_tracking():
+-     result = []
+-     for tracking in trackings:
+-         tracking = obj_to_dict(tracking)
+--        wagon = await db.wagons.find_one({'_id': ObjectId(tracking['wagon_id'])})
+-+        # Try to find wagon by ObjectId first, then by wagon_number if that fails
+-+        wagon = None
+-+        try:
+-+            wagon = await db.wagons.find_one({'_id': ObjectId(tracking['wagon_id'])})
+-+        except:
+-+            # If ObjectId fails, try to find by wagon_number (for string IDs like "001")
+-+            wagon_number = f"W{tracking['wagon_id']}"
+-+            wagon = await db.wagons.find_one({'wagon_number': wagon_number})
+-+        
+-         tracking['wagon_number'] = wagon['wagon_number'] if wagon else None
+-         tracking['wagon_type'] = wagon['type'] if wagon else None
+-         result.append(WagonTrackingResponse(**tracking))
+-@@ -1142,12 +1150,16 @@ async def get_pending_approvals():
+-         approval = obj_to_dict(approval)
+-         # Get entity details
+-         entity_details = None
+--        if approval['entity_type'] == 'rake':
+--            entity = await db.rakes.find_one({'_id': ObjectId(approval['entity_id'])})
+--            entity_details = obj_to_dict(entity) if entity else None
+--        elif approval['entity_type'] == 'order':
+--            entity = await db.orders.find_one({'_id': ObjectId(approval['entity_id'])})
+--            entity_details = obj_to_dict(entity) if entity else None
+-+        try:
+-+            if approval['entity_type'] == 'rake':
+-+                entity = await db.rakes.find_one({'_id': ObjectId(approval['entity_id'])})
+-+                entity_details = obj_to_dict(entity) if entity else None
+-+            elif approval['entity_type'] == 'order':
+-+                entity = await db.orders.find_one({'_id': ObjectId(approval['entity_id'])})
+-+                entity_details = obj_to_dict(entity) if entity else None
+-+        except:
+-+            # If ObjectId is invalid, set entity_details to None
+-+            entity_details = None
+-             
+-         approval['entity_details'] = entity_details
+-         result.append(WorkflowApprovalResponse(**approval))
+-diff --git a/test_result.md b/test_result.md
+-index 42d2f2d..af00fcd 100644
+---- a/test_result.md
+-+++ b/test_result.md
+-@@ -116,6 +116,9 @@ backend:
+-         - working: true
+-           agent: "main"
+-           comment: "All CRUD endpoints created and tested. Sample data initialization working."
+-+        - working: true
+-+          agent: "testing"
+-+          comment: "Comprehensive testing completed. All basic CRUD endpoints working correctly with proper data retrieval."
+-   
+-   - task: "AI optimization endpoint using OpenAI GPT-4 with Emergent LLM key"
+-     implemented: true
+-@@ -128,6 +131,9 @@ backend:
+-         - working: true
+-           agent: "main"
+-           comment: "AI optimization endpoint created with emergentintegrations library. GPT-4o model configured."
+-+        - working: true
+-+          agent: "testing"
+-+          comment: "AI optimization tested successfully. GPT-4o integration working, generating recommendations for rake formation."
+-   
+-   - task: "Rake formation endpoints"
+-     implemented: true
+-@@ -140,6 +146,141 @@ backend:
+-         - working: true
+-           agent: "main"
+-           comment: "Rake creation and retrieval endpoints working. Dashboard stats endpoint implemented."
+-+        - working: true
+-+          agent: "testing"
+-+          comment: "Rake formation endpoints tested. Dashboard stats working correctly with real-time data."
+-+
+-+  - task: "Real-time wagon tracking endpoints"
+-+    implemented: true
+-+    working: true
+-+    file: "server.py"
+-+    stuck_count: 0
+-+    priority: "high"
+-+    needs_retesting: false
+-+    status_history:
+-+        - working: true
+-+          agent: "testing"
+-+          comment: "Real-time wagon tracking implemented and tested. Fixed ObjectId issues. Both /wagon-tracking and /wagon-tracking/real-time endpoints working correctly."
+-+
+-+  - task: "Compatibility matrix management"
+-+    implemented: true
+-+    working: true
+-+    file: "server.py"
+-+    stuck_count: 0
+-+    priority: "high"
+-+    needs_retesting: false
+-+    status_history:
+-+        - working: true
+-+          agent: "testing"
+-+          comment: "Compatibility matrix management tested successfully. Rules retrieval and material-specific matrix queries working."
+-+
+-+  - task: "Route validation system"
+-+    implemented: true
+-+    working: true
+-+    file: "server.py"
+-+    stuck_count: 0
+-+    priority: "high"
+-+    needs_retesting: false
+-+    status_history:
+-+        - working: true
+-+          agent: "testing"
+-+          comment: "Route validation system tested. Route retrieval and validation endpoints working correctly with proper restriction checking."
+-+
+-+  - task: "Multi-destination rake formation"
+-+    implemented: true
+-+    working: true
+-+    file: "server.py"
+-+    stuck_count: 0
+-+    priority: "high"
+-+    needs_retesting: false
+-+    status_history:
+-+        - working: true
+-+          agent: "testing"
+-+          comment: "Multi-destination rake formation tested successfully. AI optimization for multi-destination routes working correctly."
+-+
+-+  - task: "Capacity monitoring with real-time data"
+-+    implemented: true
+-+    working: true
+-+    file: "server.py"
+-+    stuck_count: 0
+-+    priority: "high"
+-+    needs_retesting: false
+-+    status_history:
+-+        - working: true
+-+          agent: "testing"
+-+          comment: "Real-time capacity monitoring tested. Loading point utilization data and queue management working correctly."
+-+
+-+  - task: "ERP integration framework"
+-+    implemented: true
+-+    working: true
+-+    file: "server.py"
+-+    stuck_count: 0
+-+    priority: "high"
+-+    needs_retesting: false
+-+    status_history:
+-+        - working: true
+-+          agent: "testing"
+-+          comment: "ERP integration framework tested. Sync status retrieval and manual sync triggering working for SAP and Oracle systems."
+-+
+-+  - task: "Workflow management with approvals"
+-+    implemented: true
+-+    working: true
+-+    file: "server.py"
+-+    stuck_count: 0
+-+    priority: "high"
+-+    needs_retesting: false
+-+    status_history:
+-+        - working: true
+-+          agent: "testing"
+-+          comment: "Workflow management tested successfully. Fixed ObjectId issues in pending approvals. Approval workflow functioning correctly."
+-+
+-+  - task: "Advanced analytics and performance metrics"
+-+    implemented: true
+-+    working: true
+-+    file: "server.py"
+-+    stuck_count: 0
+-+    priority: "high"
+-+    needs_retesting: false
+-+    status_history:
+-+        - working: true
+-+          agent: "testing"
+-+          comment: "Advanced analytics tested. Performance metrics, KPIs, and trend analysis endpoints working correctly."
+-+
+-+  - task: "Control room dashboard with comprehensive data"
+-+    implemented: true
+-+    working: true
+-+    file: "server.py"
+-+    stuck_count: 0
+-+    priority: "high"
+-+    needs_retesting: false
+-+    status_history:
+-+        - working: true
+-+          agent: "testing"
+-+          comment: "Control room dashboard tested successfully. Comprehensive real-time data including rake status, wagon status, stockyard utilization, alerts, and KPIs working."
+-+
+-+  - task: "Report generation system"
+-+    implemented: true
+-+    working: true
+-+    file: "server.py"
+-+    stuck_count: 0
+-+    priority: "high"
+-+    needs_retesting: false
+-+    status_history:
+-+        - working: true
+-+          agent: "testing"
+-+          comment: "Report generation system tested. Report creation and CSV download functionality working correctly."
+-+
+-+  - task: "WebSocket real-time updates"
+-+    implemented: true
+-+    working: true
+-+    file: "server.py"
+-+    stuck_count: 0
+-+    priority: "medium"
+-+    needs_retesting: false
+-+    status_history:
+-+        - working: true
+-+          agent: "testing"
+-+          comment: "WebSocket endpoint implemented at /ws/real-time-updates. Real-time update broadcasting system in place."
+- 
+- frontend:
+-   - task: "Welcome screen with backend connection check"
+-@@ -222,8 +363,6 @@ metadata:
+- 
+- test_plan:
+-   current_focus:
+--    - "Backend API endpoints testing"
+--    - "AI optimization functionality"
+-     - "Frontend navigation and data flow"
+-   stuck_tasks: []
+-   test_all: false
+-@@ -231,4 +370,6 @@ test_plan:
+- 
+- agent_communication:
+-     - agent: "main"
+--      message: "Initial MVP completed with all core features. Backend tested with curl and working. Frontend needs bundle testing and E2E testing."
+-\ No newline at end of file
+-+      message: "Initial MVP completed with all core features. Backend tested with curl and working. Frontend needs bundle testing and E2E testing."
+-+    - agent: "testing"
+-+      message: "Comprehensive backend testing completed successfully. All 11 advanced control room features tested and working: 1) Real-time wagon tracking (fixed ObjectId issues), 2) Compatibility matrix management, 3) Route validation system, 4) Multi-destination rake formation, 5) Capacity monitoring with real-time data, 6) ERP integration framework, 7) Workflow management with approvals (fixed ObjectId issues), 8) Advanced analytics and performance metrics, 9) Control room dashboard with comprehensive data, 10) Report generation system, 11) WebSocket real-time updates. AI optimization working correctly with GPT-4o integration. Sample data initialization includes all advanced features. All 27 test cases passed (100% success rate). Backend is production-ready."
+-\ No newline at end of file
 diff --git a/test_result.md b/test_result.md
-index 42d2f2d..af00fcd 100644
+index 980541f..144bf69 100644
 --- a/test_result.md
 +++ b/test_result.md
-@@ -116,6 +116,9 @@ backend:
-         - working: true
-           agent: "main"
-           comment: "All CRUD endpoints created and tested. Sample data initialization working."
-+        - working: true
-+          agent: "testing"
-+          comment: "Comprehensive testing completed. All basic CRUD endpoints working correctly with proper data retrieval."
-   
-   - task: "AI optimization endpoint using OpenAI GPT-4 with Emergent LLM key"
+@@ -282,283 +282,331 @@ backend:
+           agent: "testing"
+           comment: "WebSocket endpoint implemented at /ws/real-time-updates. Real-time update broadcasting system in place."
+ 
+-frontend:
+-  - task: "Welcome screen with backend connection check"
++  - task: "Cost & Efficiency Optimization - Wagon Utilization Maximization"
      implemented: true
-@@ -128,6 +131,9 @@ backend:
-         - working: true
+-    working: "NA"
+-    file: "app/index.tsx"
++    working: true
++    file: "server.py"
+     stuck_count: 0
+     priority: "high"
+-    needs_retesting: true
++    needs_retesting: false
+     status_history:
+         - working: "NA"
            agent: "main"
-           comment: "AI optimization endpoint created with emergentintegrations library. GPT-4o model configured."
+-          comment: "Welcome screen created with sample data initialization. Needs testing."
++          comment: "Wagon utilization analysis and optimization endpoints created. Ensures no partial loading."
 +        - working: true
 +          agent: "testing"
-+          comment: "AI optimization tested successfully. GPT-4o integration working, generating recommendations for rake formation."
++          comment: "Comprehensive testing completed. Both /wagon-utilization/analyze and /wagon-utilization/optimize endpoints working correctly with proper data validation."
    
-   - task: "Rake formation endpoints"
+-  - task: "Dashboard with real-time stats"
++  - task: "Cost & Efficiency Optimization - Real-time Demurrage Tracking & Alerts"
      implemented: true
-@@ -140,6 +146,141 @@ backend:
-         - working: true
+-    working: "NA"
+-    file: "app/(tabs)/index.tsx"
++    working: true
++    file: "server.py"
+     stuck_count: 0
+     priority: "high"
+-    needs_retesting: true
++    needs_retesting: false
+     status_history:
+         - working: "NA"
            agent: "main"
-           comment: "Rake creation and retrieval endpoints working. Dashboard stats endpoint implemented."
+-          comment: "Dashboard showing pending orders, active rakes, wagons, inventory value, urgent orders."
++          comment: "Active demurrage alerts and total cost tracking implemented."
 +        - working: true
 +          agent: "testing"
-+          comment: "Rake formation endpoints tested. Dashboard stats working correctly with real-time data."
-+
-+  - task: "Real-time wagon tracking endpoints"
-+    implemented: true
++          comment: "Demurrage tracking tested successfully. Both /demurrage/active-alerts and /demurrage/total-cost endpoints working correctly."
+   
+-  - task: "Orders management screen"
++  - task: "Cost & Efficiency Optimization - Freight Rate Comparison (Rail vs Road)"
+     implemented: true
+-    working: "NA"
+-    file: "app/(tabs)/orders.tsx"
 +    working: true
 +    file: "server.py"
-+    stuck_count: 0
+     stuck_count: 0
+     priority: "high"
+-    needs_retesting: true
++    needs_retesting: false
+     status_history:
+         - working: "NA"
+           agent: "main"
+-          comment: "Order creation, listing with priority badges, deadline tracking implemented."
++          comment: "Freight rate comparison engine with rail/road mode analysis and CO2 emissions."
++        - working: true
++          agent: "testing"
++          comment: "Freight rate comparison tested successfully. /freight-rates/compare endpoint working with proper origin/destination/weight parameters."
+   
+-  - task: "Inventory management screen"
++  - task: "Cost & Efficiency Optimization - Combined Rail-Road Multimodal Optimization"
+     implemented: true
+-    working: "NA"
+-    file: "app/(tabs)/inventory.tsx"
++    working: true
++    file: "server.py"
+     stuck_count: 0
+-    priority: "medium"
+-    needs_retesting: true
 +    priority: "high"
 +    needs_retesting: false
-+    status_history:
+     status_history:
+         - working: "NA"
+           agent: "main"
+-          comment: "Inventory grouped by stockyard, stock level indicators, value calculations."
++          comment: "Multimodal transport optimization comparing pure rail, pure road, and combined modes."
 +        - working: true
 +          agent: "testing"
-+          comment: "Real-time wagon tracking implemented and tested. Fixed ObjectId issues. Both /wagon-tracking and /wagon-tracking/real-time endpoints working correctly."
-+
-+  - task: "Compatibility matrix management"
-+    implemented: true
++          comment: "Multimodal optimization tested successfully. /transport/multimodal-optimization endpoint working correctly with comprehensive transport mode analysis."
+   
+-  - task: "Rakes management screen"
++  - task: "Cost & Efficiency Optimization - Route Optimization (Cost/Time/Distance/Emission)"
+     implemented: true
+-    working: "NA"
+-    file: "app/(tabs)/rakes.tsx"
 +    working: true
 +    file: "server.py"
-+    stuck_count: 0
-+    priority: "high"
+     stuck_count: 0
+     priority: "high"
+-    needs_retesting: true
 +    needs_retesting: false
-+    status_history:
+     status_history:
+         - working: "NA"
+           agent: "main"
+-          comment: "Rake listing with AI recommendations, cost breakdown, status tracking."
++          comment: "Route optimization engine with multiple criteria support."
 +        - working: true
 +          agent: "testing"
-+          comment: "Compatibility matrix management tested successfully. Rules retrieval and material-specific matrix queries working."
-+
-+  - task: "Route validation system"
-+    implemented: true
++          comment: "Route optimization tested successfully. /route/optimize endpoint working for all criteria: cost, time, distance, and emission optimization."
+   
+-  - task: "AI optimization screen"
++  - task: "Cost & Efficiency Optimization - Penalty & Delay Predictive Alerts"
+     implemented: true
+-    working: "NA"
+-    file: "app/(tabs)/optimize.tsx"
 +    working: true
 +    file: "server.py"
-+    stuck_count: 0
-+    priority: "high"
+     stuck_count: 0
+     priority: "high"
+-    needs_retesting: true
 +    needs_retesting: false
-+    status_history:
+     status_history:
+         - working: "NA"
+           agent: "main"
+-          comment: "Order selection, AI optimization, automatic rake creation implemented."
+-
+-metadata:
+-  created_by: "main_agent"
+-  version: "1.0"
+-  test_sequence: 0
+-  run_ui: false
+-
+-test_plan:
+-  current_focus:
+-    - "Frontend navigation and data flow"
+-  stuck_tasks: []
+-  test_all: false
+-  test_priority: "high_first"
+-
+-  - task: "Cost & Efficiency Optimization - Wagon Utilization Maximization"
++          comment: "Predictive penalty alerts system with mitigation actions."
 +        - working: true
 +          agent: "testing"
-+          comment: "Route validation system tested. Route retrieval and validation endpoints working correctly with proper restriction checking."
-+
-+  - task: "Multi-destination rake formation"
-+    implemented: true
++          comment: "Penalty alerts tested successfully. /penalties/alerts endpoint working correctly with predictive alert generation."
++  
++  - task: "Cost & Efficiency Optimization - Loading Time Optimization"
+     implemented: true
+-    working: "NA"
 +    working: true
-+    file: "server.py"
-+    stuck_count: 0
-+    priority: "high"
+     file: "server.py"
+     stuck_count: 0
+     priority: "high"
+-    needs_retesting: true
 +    needs_retesting: false
-+    status_history:
+     status_history:
+         - working: "NA"
+           agent: "main"
+-          comment: "Wagon utilization analysis and optimization endpoints created. Ensures no partial loading."
++          comment: "Loading time analysis with bottleneck identification and recommendations."
 +        - working: true
 +          agent: "testing"
-+          comment: "Multi-destination rake formation tested successfully. AI optimization for multi-destination routes working correctly."
-+
-+  - task: "Capacity monitoring with real-time data"
-+    implemented: true
++          comment: "Loading time optimization tested successfully. /loading/optimization/<loading_point_id> endpoint working with bottleneck analysis."
+   
+-  - task: "Cost & Efficiency Optimization - Real-time Demurrage Tracking & Alerts"
++  - task: "Cost & Efficiency Optimization - CO2 Emission & Energy Efficient Routes"
+     implemented: true
+-    working: "NA"
 +    working: true
-+    file: "server.py"
-+    stuck_count: 0
-+    priority: "high"
+     file: "server.py"
+     stuck_count: 0
+     priority: "high"
+-    needs_retesting: true
 +    needs_retesting: false
-+    status_history:
+     status_history:
+         - working: "NA"
+           agent: "main"
+-          comment: "Active demurrage alerts and total cost tracking implemented."
++          comment: "CO2 analysis for route options with efficiency ratings."
 +        - working: true
 +          agent: "testing"
-+          comment: "Real-time capacity monitoring tested. Loading point utilization data and queue management working correctly."
-+
-+  - task: "ERP integration framework"
-+    implemented: true
++          comment: "CO2 analysis tested successfully. /route/co2-analysis endpoint working correctly with emission calculations and efficiency ratings."
+   
+-  - task: "Cost & Efficiency Optimization - Freight Rate Comparison (Rail vs Road)"
++  - task: "AI & ML Intelligence - Predictive Demand Forecasting"
+     implemented: true
+-    working: "NA"
 +    working: true
-+    file: "server.py"
-+    stuck_count: 0
-+    priority: "high"
+     file: "server.py"
+     stuck_count: 0
+     priority: "high"
+-    needs_retesting: true
 +    needs_retesting: false
-+    status_history:
+     status_history:
+         - working: "NA"
+           agent: "main"
+-          comment: "Freight rate comparison engine with rail/road mode analysis and CO2 emissions."
++          comment: "Historical demand analysis with trend forecasting."
 +        - working: true
 +          agent: "testing"
-+          comment: "ERP integration framework tested. Sync status retrieval and manual sync triggering working for SAP and Oracle systems."
-+
-+  - task: "Workflow management with approvals"
-+    implemented: true
++          comment: "AI demand forecasting tested successfully. /ai/demand-forecast endpoint working with GPT-4o integration for predictive analysis."
+   
+-  - task: "Cost & Efficiency Optimization - Combined Rail-Road Multimodal Optimization"
++  - task: "AI & ML Intelligence - Predictive Rake/Wagon Availability Forecasting"
+     implemented: true
+-    working: "NA"
 +    working: true
-+    file: "server.py"
-+    stuck_count: 0
-+    priority: "high"
+     file: "server.py"
+     stuck_count: 0
+     priority: "high"
+-    needs_retesting: true
 +    needs_retesting: false
-+    status_history:
+     status_history:
+         - working: "NA"
+           agent: "main"
+-          comment: "Multimodal transport optimization comparing pure rail, pure road, and combined modes."
++          comment: "Resource availability forecasting with utilization predictions."
 +        - working: true
 +          agent: "testing"
-+          comment: "Workflow management tested successfully. Fixed ObjectId issues in pending approvals. Approval workflow functioning correctly."
-+
-+  - task: "Advanced analytics and performance metrics"
-+    implemented: true
++          comment: "AI availability forecasting tested successfully. /ai/availability-forecast endpoint working with resource prediction capabilities."
+   
+-  - task: "Cost & Efficiency Optimization - Route Optimization (Cost/Time/Distance/Emission)"
++  - task: "AI & ML Intelligence - AI-based Delay Prediction"
+     implemented: true
+-    working: "NA"
 +    working: true
-+    file: "server.py"
-+    stuck_count: 0
-+    priority: "high"
+     file: "server.py"
+     stuck_count: 0
+     priority: "high"
+-    needs_retesting: true
 +    needs_retesting: false
-+    status_history:
+     status_history:
+         - working: "NA"
+           agent: "main"
+-          comment: "Route optimization engine with multiple criteria support."
++          comment: "Delay prediction with weather and congestion simulation (ready for real data integration)."
 +        - working: true
 +          agent: "testing"
-+          comment: "Advanced analytics tested. Performance metrics, KPIs, and trend analysis endpoints working correctly."
-+
-+  - task: "Control room dashboard with comprehensive data"
-+    implemented: true
++          comment: "AI delay prediction tested successfully. /ai/delay-prediction endpoint working with valid rake IDs and proper error handling for invalid inputs."
+   
+-  - task: "Cost & Efficiency Optimization - Penalty & Delay Predictive Alerts"
++  - task: "AI & ML Intelligence - AI-based Anomaly Detection"
+     implemented: true
+-    working: "NA"
 +    working: true
-+    file: "server.py"
-+    stuck_count: 0
-+    priority: "high"
+     file: "server.py"
+     stuck_count: 0
+     priority: "high"
+-    needs_retesting: true
 +    needs_retesting: false
-+    status_history:
+     status_history:
+         - working: "NA"
+           agent: "main"
+-          comment: "Predictive penalty alerts system with mitigation actions."
++          comment: "Automated anomaly detection for operations, maintenance, and inventory."
 +        - working: true
 +          agent: "testing"
-+          comment: "Control room dashboard tested successfully. Comprehensive real-time data including rake status, wagon status, stockyard utilization, alerts, and KPIs working."
-+
-+  - task: "Report generation system"
-+    implemented: true
++          comment: "AI anomaly detection tested successfully. /ai/anomaly-detection endpoint working with comprehensive operational anomaly identification."
+   
+-  - task: "Cost & Efficiency Optimization - Loading Time Optimization"
++  - task: "AI & ML Intelligence - AI-based Stock Transfer Recommendations"
+     implemented: true
+-    working: "NA"
 +    working: true
-+    file: "server.py"
-+    stuck_count: 0
-+    priority: "high"
+     file: "server.py"
+     stuck_count: 0
+     priority: "high"
+-    needs_retesting: true
 +    needs_retesting: false
-+    status_history:
+     status_history:
+         - working: "NA"
+           agent: "main"
+-          comment: "Loading time analysis with bottleneck identification and recommendations."
++          comment: "Inter-stockyard transfer optimization based on inventory imbalances."
 +        - working: true
 +          agent: "testing"
-+          comment: "Report generation system tested. Report creation and CSV download functionality working correctly."
-+
-+  - task: "WebSocket real-time updates"
-+    implemented: true
++          comment: "AI stock transfer recommendations tested successfully. /ai/stock-transfer-recommendations endpoint working with intelligent transfer suggestions."
+   
+-  - task: "Cost & Efficiency Optimization - CO2 Emission & Energy Efficient Routes"
++  - task: "AI & ML Intelligence - What-If Scenario Simulation Engine"
+     implemented: true
+-    working: "NA"
 +    working: true
-+    file: "server.py"
-+    stuck_count: 0
+     file: "server.py"
+     stuck_count: 0
+     priority: "high"
+-    needs_retesting: true
++    needs_retesting: false
+     status_history:
+         - working: "NA"
+           agent: "main"
+-          comment: "CO2 analysis for route options with efficiency ratings."
++          comment: "Scenario simulation with risk assessment and outcome prediction."
++        - working: true
++          agent: "testing"
++          comment: "AI scenario simulation tested successfully. /ai/scenario-simulation endpoint working with comprehensive what-if analysis capabilities."
+   
+-  - task: "AI & ML Intelligence - Predictive Demand Forecasting"
++  - task: "AI & ML Intelligence - AI-based Production Suggestions"
+     implemented: true
+-    working: "NA"
++    working: true
+     file: "server.py"
+     stuck_count: 0
+     priority: "high"
+-    needs_retesting: true
++    needs_retesting: false
+     status_history:
+         - working: "NA"
+           agent: "main"
+-          comment: "Historical demand analysis with trend forecasting."
++          comment: "Production planning recommendations based on demand vs supply analysis."
++        - working: true
++          agent: "testing"
++          comment: "AI production suggestions tested successfully. /ai/production-suggestions endpoint working with intelligent production planning recommendations."
+   
+-  - task: "AI & ML Intelligence - Predictive Rake/Wagon Availability Forecasting"
++  - task: "AI & ML Intelligence - Enhanced Prescriptive Multi-objective AI Optimization"
+     implemented: true
+-    working: "NA"
++    working: true
+     file: "server.py"
+     stuck_count: 0
+     priority: "high"
+-    needs_retesting: true
++    needs_retesting: false
+     status_history:
+         - working: "NA"
+           agent: "main"
+-          comment: "Resource availability forecasting with utilization predictions."
+-  
+-  - task: "AI & ML Intelligence - AI-based Delay Prediction"
++          comment: "Advanced multi-objective optimization using GPT-4o (cost + SLA + utilization)."
++        - working: true
++          agent: "testing"
++          comment: "AI prescriptive multi-objective optimization tested successfully. /ai/prescriptive-optimization endpoint working with advanced GPT-4o powered optimization balancing cost, SLA compliance, and utilization."
++
++frontend:
++  - task: "Welcome screen with backend connection check"
+     implemented: true
+     working: "NA"
+-    file: "server.py"
++    file: "app/index.tsx"
+     stuck_count: 0
+     priority: "high"
+     needs_retesting: true
+     status_history:
+         - working: "NA"
+           agent: "main"
+-          comment: "Delay prediction with weather and congestion simulation (ready for real data integration)."
++          comment: "Welcome screen created with sample data initialization. Needs testing."
+   
+-  - task: "AI & ML Intelligence - AI-based Anomaly Detection"
++  - task: "Dashboard with real-time stats"
+     implemented: true
+     working: "NA"
+-    file: "server.py"
++    file: "app/(tabs)/index.tsx"
+     stuck_count: 0
+     priority: "high"
+     needs_retesting: true
+     status_history:
+         - working: "NA"
+           agent: "main"
+-          comment: "Automated anomaly detection for operations, maintenance, and inventory."
++          comment: "Dashboard showing pending orders, active rakes, wagons, inventory value, urgent orders."
+   
+-  - task: "AI & ML Intelligence - AI-based Stock Transfer Recommendations"
++  - task: "Orders management screen"
+     implemented: true
+     working: "NA"
+-    file: "server.py"
++    file: "app/(tabs)/orders.tsx"
+     stuck_count: 0
+     priority: "high"
+     needs_retesting: true
+     status_history:
+         - working: "NA"
+           agent: "main"
+-          comment: "Inter-stockyard transfer optimization based on inventory imbalances."
++          comment: "Order creation, listing with priority badges, deadline tracking implemented."
+   
+-  - task: "AI & ML Intelligence - What-If Scenario Simulation Engine"
++  - task: "Inventory management screen"
+     implemented: true
+     working: "NA"
+-    file: "server.py"
++    file: "app/(tabs)/inventory.tsx"
+     stuck_count: 0
+-    priority: "high"
 +    priority: "medium"
-+    needs_retesting: false
-+    status_history:
-+        - working: true
-+          agent: "testing"
-+          comment: "WebSocket endpoint implemented at /ws/real-time-updates. Real-time update broadcasting system in place."
- 
- frontend:
-   - task: "Welcome screen with backend connection check"
-@@ -222,8 +363,6 @@ metadata:
- 
- test_plan:
-   current_focus:
--    - "Backend API endpoints testing"
--    - "AI optimization functionality"
-     - "Frontend navigation and data flow"
-   stuck_tasks: []
-   test_all: false
-@@ -231,4 +370,6 @@ test_plan:
+     needs_retesting: true
+     status_history:
+         - working: "NA"
+           agent: "main"
+-          comment: "Scenario simulation with risk assessment and outcome prediction."
++          comment: "Inventory grouped by stockyard, stock level indicators, value calculations."
+   
+-  - task: "AI & ML Intelligence - AI-based Production Suggestions"
++  - task: "Rakes management screen"
+     implemented: true
+     working: "NA"
+-    file: "server.py"
++    file: "app/(tabs)/rakes.tsx"
+     stuck_count: 0
+     priority: "high"
+     needs_retesting: true
+     status_history:
+         - working: "NA"
+           agent: "main"
+-          comment: "Production planning recommendations based on demand vs supply analysis."
++          comment: "Rake listing with AI recommendations, cost breakdown, status tracking."
+   
+-  - task: "AI & ML Intelligence - Enhanced Prescriptive Multi-objective AI Optimization"
++  - task: "AI optimization screen"
+     implemented: true
+     working: "NA"
+-    file: "server.py"
++    file: "app/(tabs)/optimize.tsx"
+     stuck_count: 0
+     priority: "high"
+     needs_retesting: true
+     status_history:
+         - working: "NA"
+           agent: "main"
+-          comment: "Advanced multi-objective optimization using GPT-4o (cost + SLA + utilization)."
++          comment: "Order selection, AI optimization, automatic rake creation implemented."
++
++metadata:
++  created_by: "main_agent"
++  version: "1.0"
++  test_sequence: 1
++  run_ui: false
++
++test_plan:
++  current_focus:
++    - "Frontend navigation and data flow"
++  stuck_tasks: []
++  test_all: false
++  test_priority: "high_first"
  
  agent_communication:
      - agent: "main"
--      message: "Initial MVP completed with all core features. Backend tested with curl and working. Frontend needs bundle testing and E2E testing."
+@@ -566,4 +614,6 @@ agent_communication:
+     - agent: "testing"
+       message: "Comprehensive backend testing completed successfully. All 11 advanced control room features tested and working: 1) Real-time wagon tracking (fixed ObjectId issues), 2) Compatibility matrix management, 3) Route validation system, 4) Multi-destination rake formation, 5) Capacity monitoring with real-time data, 6) ERP integration framework, 7) Workflow management with approvals (fixed ObjectId issues), 8) Advanced analytics and performance metrics, 9) Control room dashboard with comprehensive data, 10) Report generation system, 11) WebSocket real-time updates. AI optimization working correctly with GPT-4o integration. Sample data initialization includes all advanced features. All 27 test cases passed (100% success rate). Backend is production-ready."
+     - agent: "main"
+-      message: "Added 16 new advanced features for production deployment: 8 Cost & Efficiency Optimization features (wagon utilization, demurrage tracking, freight comparison, multimodal optimization, route optimization, penalty alerts, loading time optimization, CO2 analysis) + 8 AI/ML Intelligence features (demand forecasting, availability forecasting, delay prediction, anomaly detection, stock transfer recommendations, scenario simulation, production suggestions, multi-objective optimization). All features use GPT-4o via Emergent LLM key. Ready for comprehensive backend testing."
 \ No newline at end of file
-+      message: "Initial MVP completed with all core features. Backend tested with curl and working. Frontend needs bundle testing and E2E testing."
++      message: "Added 16 new advanced features for production deployment: 8 Cost & Efficiency Optimization features (wagon utilization, demurrage tracking, freight comparison, multimodal optimization, route optimization, penalty alerts, loading time optimization, CO2 analysis) + 8 AI/ML Intelligence features (demand forecasting, availability forecasting, delay prediction, anomaly detection, stock transfer recommendations, scenario simulation, production suggestions, multi-objective optimization). All features use GPT-4o via Emergent LLM key. Ready for comprehensive backend testing."
 +    - agent: "testing"
-+      message: "Comprehensive backend testing completed successfully. All 11 advanced control room features tested and working: 1) Real-time wagon tracking (fixed ObjectId issues), 2) Compatibility matrix management, 3) Route validation system, 4) Multi-destination rake formation, 5) Capacity monitoring with real-time data, 6) ERP integration framework, 7) Workflow management with approvals (fixed ObjectId issues), 8) Advanced analytics and performance metrics, 9) Control room dashboard with comprehensive data, 10) Report generation system, 11) WebSocket real-time updates. AI optimization working correctly with GPT-4o integration. Sample data initialization includes all advanced features. All 27 test cases passed (100% success rate). Backend is production-ready."
++      message: "COMPREHENSIVE TESTING COMPLETED FOR 16 NEW ADVANCED FEATURES: ✅ All 10 Cost & Efficiency Optimization endpoints working (wagon utilization analysis/optimization, demurrage alerts/costs, freight rate comparison, multimodal transport optimization, route optimization for all criteria, penalty alerts, loading time optimization, CO2 analysis). ✅ All 8 AI & ML Intelligence endpoints working (demand forecasting, availability forecasting, delay prediction, anomaly detection, stock transfer recommendations, scenario simulation, production suggestions, prescriptive multi-objective optimization). ✅ GPT-4o integration fully functional. ✅ Proper error handling with ObjectId validation. ✅ 100% success rate (18/18 endpoints tested). Backend is production-ready with all advanced features operational."
 \ No newline at end of file
