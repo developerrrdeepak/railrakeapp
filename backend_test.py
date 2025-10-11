@@ -712,6 +712,8 @@ class AdvancedBackendTester:
             ("Basic Connectivity", self.test_basic_connectivity),
             ("Sample Data Initialization", self.test_sample_data_initialization),
             ("All Basic Endpoints", self.test_all_basic_endpoints),
+            ("Cost & Efficiency Optimization (8 endpoints)", self.test_cost_efficiency_optimization),
+            ("AI & ML Intelligence (8 endpoints)", self.test_ai_ml_intelligence),
             ("Real-time Wagon Tracking", self.test_real_time_wagon_tracking),
             ("Compatibility Matrix", self.test_compatibility_matrix),
             ("Route Validation", self.test_route_validation),
