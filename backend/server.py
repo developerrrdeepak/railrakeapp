@@ -2113,6 +2113,800 @@ async def websocket_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         websocket_connections.remove(websocket)
 
+# 5. ROUTE OPTIMIZATION (SHORTEST COST-EFFECTIVE)
+@api_router.post("/route/optimize")
+async def optimize_route(request: Dict[str, Any]):
+    """Find optimal route based on cost, distance, or time"""
+    try:
+        origin = request.get('origin')
+        destination = request.get('destination')
+        criteria = request.get('criteria', 'cost')  # cost, time, distance, emission
+        weight_tons = request.get('weight_tons', 100)
+        
+        # Fetch available routes
+        routes = await db.routes.find({'origin': origin, 'destination': destination, 'is_active': True}).to_list(100)
+        
+        # If no direct routes, simulate some options
+        if not routes:
+            routes = [
+                {
+                    'name': f"{origin}-{destination}-Direct",
+                    'origin': origin,
+                    'destination': destination,
+                    'distance_km': 500 + (hash(origin + destination) % 500),
+                    'estimated_time_hours': 18,
+                    'cost_per_km': 5.5,
+                    'restrictions': []
+                },
+                {
+                    'name': f"{origin}-{destination}-Via-Hub",
+                    'origin': origin,
+                    'destination': destination,
+                    'distance_km': 600 + (hash(origin + destination) % 400),
+                    'estimated_time_hours': 22,
+                    'cost_per_km': 4.8,
+                    'restrictions': []
+                }
+            ]
+        
+        route_options = []
+        for route in routes:
+            route = obj_to_dict(route) if '_id' in route else route
+            
+            total_cost = route['distance_km'] * route['cost_per_km'] * weight_tons / 60
+            co2_emission = route['distance_km'] * 0.03 * weight_tons  # Rail emission factor
+            
+            route_options.append({
+                'route_name': route['name'],
+                'distance_km': route['distance_km'],
+                'estimated_time_hours': route['estimated_time_hours'],
+                'total_cost': total_cost,
+                'cost_per_km': route['cost_per_km'],
+                'co2_emissions_kg': co2_emission,
+                'restrictions': route.get('restrictions', [])
+            })
+        
+        # Sort based on criteria
+        if criteria == 'cost':
+            route_options.sort(key=lambda x: x['total_cost'])
+        elif criteria == 'time':
+            route_options.sort(key=lambda x: x['estimated_time_hours'])
+        elif criteria == 'distance':
+            route_options.sort(key=lambda x: x['distance_km'])
+        elif criteria == 'emission':
+            route_options.sort(key=lambda x: x['co2_emissions_kg'])
+        
+        optimal_route = route_options[0] if route_options else None
+        
+        return RouteOptimization(
+            origin=origin,
+            destination=destination,
+            route_options=route_options,
+            optimal_route=optimal_route,
+            criteria=criteria
+        )
+        
+    except Exception as e:
+        logger.error(f"Route optimization error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# 6. PENALTY & DELAY MINIMIZATION
+@api_router.get("/penalties/alerts", response_model=List[PenaltyAlertResponse])
+async def get_penalty_alerts():
+    """Get predictive penalty alerts for orders at risk"""
+    try:
+        alerts = []
+        
+        # Fetch pending orders
+        orders = await db.orders.find({'status': 'pending'}).to_list(1000)
+        
+        for order in orders:
+            order = obj_to_dict(order)
+            
+            deadline = order['deadline']
+            if isinstance(deadline, str):
+                deadline = datetime.fromisoformat(deadline)
+            
+            # Estimate delivery time (simplified - in production, use actual route data)
+            estimated_transport_days = 3 + random.uniform(0, 2)
+            estimated_delivery = datetime.utcnow() + timedelta(days=estimated_transport_days)
+            
+            days_until_deadline = (deadline - datetime.utcnow()).days
+            days_delayed = (estimated_delivery - deadline).days if estimated_delivery > deadline else 0
+            
+            # Only create alert if at risk
+            if days_delayed > 0 or days_until_deadline < 3:
+                penalty_amount = days_delayed * order.get('penalty_per_day', 5000) if days_delayed > 0 else 0
+                
+                if days_delayed > 5:
+                    alert_level = "critical"
+                elif days_delayed > 0:
+                    alert_level = "warning"
+                else:
+                    alert_level = "upcoming"
+                
+                mitigation_actions = []
+                if days_until_deadline < 3:
+                    mitigation_actions.append("Expedite loading process")
+                    mitigation_actions.append("Consider faster transport route")
+                if days_delayed > 0:
+                    mitigation_actions.append("Negotiate penalty terms with customer")
+                    mitigation_actions.append("Assign priority wagons")
+                
+                alert = PenaltyAlertResponse(
+                    id=str(ObjectId()),
+                    order_id=order['id'],
+                    customer_name=order['customer_name'],
+                    deadline=deadline,
+                    estimated_delivery=estimated_delivery,
+                    days_delayed=days_delayed,
+                    penalty_amount=penalty_amount,
+                    alert_level=alert_level,
+                    mitigation_actions=mitigation_actions
+                )
+                alerts.append(alert)
+        
+        # Sort by penalty amount and alert level
+        alerts.sort(key=lambda x: (x.alert_level == "critical", x.penalty_amount), reverse=True)
+        
+        return alerts
+        
+    except Exception as e:
+        logger.error(f"Penalty alerts error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# 7. LOADING TIME OPTIMIZATION
+@api_router.get("/loading/optimization/{loading_point_id}")
+async def optimize_loading_time(loading_point_id: str):
+    """Analyze and optimize loading time for a loading point"""
+    try:
+        loading_point = await db.loading_points.find_one({'_id': ObjectId(loading_point_id)})
+        if not loading_point:
+            raise HTTPException(status_code=404, detail="Loading point not found")
+        
+        loading_point = obj_to_dict(loading_point)
+        
+        # Simulate current performance
+        current_avg_time = 4.5 + random.uniform(0, 2)  # hours per rake
+        optimal_time = 3.5  # Benchmark optimal time
+        
+        efficiency_gain = ((current_avg_time - optimal_time) / current_avg_time) * 100
+        
+        bottlenecks = []
+        recommendations = []
+        
+        if current_avg_time > optimal_time:
+            if loading_point.get('current_utilization', 0) > 0.7:
+                bottlenecks.append("High utilization causing queue delays")
+                recommendations.append("Increase loading crew capacity")
+                recommendations.append("Implement time-slot based loading schedule")
+            
+            bottlenecks.append("Material handling equipment limitations")
+            recommendations.append("Upgrade loading machinery")
+            
+            bottlenecks.append("Manual documentation processes")
+            recommendations.append("Implement automated documentation system")
+        
+        return LoadingTimeOptimization(
+            loading_point_id=loading_point_id,
+            current_avg_time_hours=current_avg_time,
+            optimal_time_hours=optimal_time,
+            efficiency_gain=efficiency_gain,
+            bottlenecks=bottlenecks,
+            recommendations=recommendations
+        )
+        
+    except Exception as e:
+        logger.error(f"Loading time optimization error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# 8. CO2 EMISSION & ENERGY EFFICIENT ROUTES
+@api_router.post("/route/co2-analysis")
+async def analyze_co2_emissions(request: Dict[str, Any]):
+    """Analyze CO2 emissions for route options"""
+    try:
+        origin = request.get('origin')
+        destination = request.get('destination')
+        weight_tons = request.get('weight_tons', 100)
+        
+        # Analyze different transport modes
+        analyses = []
+        
+        # Rail analysis
+        distance_km = 500 + (hash(origin + destination) % 500)
+        rail_co2_per_ton_km = 0.03  # kg CO2 per ton-km for rail
+        rail_total_co2 = distance_km * weight_tons * rail_co2_per_ton_km
+        
+        analyses.append(CO2Analysis(
+            route_id="rail_route",
+            transport_mode=TransportMode.RAIL,
+            distance_km=distance_km,
+            load_tons=weight_tons,
+            total_co2_kg=rail_total_co2,
+            co2_per_ton_km=rail_co2_per_ton_km,
+            efficiency_rating="excellent" if rail_total_co2 < 2000 else "good"
+        ))
+        
+        # Road analysis
+        road_co2_per_ton_km = 0.08  # kg CO2 per ton-km for road
+        road_total_co2 = distance_km * weight_tons * road_co2_per_ton_km
+        
+        analyses.append(CO2Analysis(
+            route_id="road_route",
+            transport_mode=TransportMode.ROAD,
+            distance_km=distance_km,
+            load_tons=weight_tons,
+            total_co2_kg=road_total_co2,
+            co2_per_ton_km=road_co2_per_ton_km,
+            efficiency_rating="average" if road_total_co2 < 5000 else "poor"
+        ))
+        
+        # Sort by emissions (lowest first)
+        analyses.sort(key=lambda x: x.total_co2_kg)
+        
+        optimal_route = analyses[0]
+        emission_savings = analyses[-1].total_co2_kg - analyses[0].total_co2_kg
+        
+        return {
+            'origin': origin,
+            'destination': destination,
+            'weight_tons': weight_tons,
+            'analyses': [a.dict() for a in analyses],
+            'optimal_route': optimal_route.dict(),
+            'emission_savings_kg': emission_savings,
+            'recommendation': f"Use {optimal_route.transport_mode} to save {emission_savings:.2f} kg CO2"
+        }
+        
+    except Exception as e:
+        logger.error(f"CO2 analysis error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# =====================================================
+# AI & ML INTELLIGENCE FEATURES
+# =====================================================
+
+# Models for AI/ML Features
+class DemandForecast(BaseModel):
+    material_id: str
+    material_name: str
+    forecast_period_days: int
+    predicted_demand: float
+    confidence_score: float
+    historical_avg: float
+    trend: str  # "increasing", "decreasing", "stable"
+    
+class AvailabilityForecast(BaseModel):
+    resource_type: str  # "wagon", "rake"
+    forecast_date: datetime
+    predicted_available: int
+    current_available: int
+    utilization_forecast: float
+
+class DelayPrediction(BaseModel):
+    rake_id: str
+    predicted_delay_hours: float
+    delay_probability: float
+    contributing_factors: List[str]
+    weather_impact: str
+    congestion_impact: str
+
+class AnomalyDetection(BaseModel):
+    anomaly_type: str
+    entity_id: str
+    entity_type: str
+    severity: str
+    description: str
+    detected_at: datetime
+    recommended_action: str
+
+class StockTransferRecommendation(BaseModel):
+    from_stockyard_id: str
+    to_stockyard_id: str
+    material_id: str
+    recommended_quantity: float
+    reason: str
+    cost_benefit: float
+
+class WhatIfScenario(BaseModel):
+    scenario_name: str
+    parameters: Dict[str, Any]
+    predicted_outcomes: Dict[str, Any]
+    risk_assessment: str
+
+# 1. PREDICTIVE DEMAND FORECASTING
+@api_router.post("/ai/demand-forecast")
+async def forecast_demand(request: Dict[str, Any]):
+    """Predict future demand based on historical patterns"""
+    try:
+        forecast_days = request.get('forecast_days', 30)
+        
+        # Fetch historical orders
+        orders = await db.orders.find().to_list(1000)
+        
+        # Group by material
+        material_demand = {}
+        for order in orders:
+            mat_id = str(order['material_id'])
+            if mat_id not in material_demand:
+                material_demand[mat_id] = []
+            material_demand[mat_id].append(order['quantity'])
+        
+        forecasts = []
+        for mat_id, quantities in material_demand.items():
+            material = await db.materials.find_one({'_id': ObjectId(mat_id)})
+            
+            if quantities:
+                historical_avg = sum(quantities) / len(quantities)
+                # Simple trend analysis
+                recent_avg = sum(quantities[-5:]) / len(quantities[-5:]) if len(quantities) >= 5 else historical_avg
+                
+                if recent_avg > historical_avg * 1.1:
+                    trend = "increasing"
+                    predicted_demand = historical_avg * 1.15
+                elif recent_avg < historical_avg * 0.9:
+                    trend = "decreasing"
+                    predicted_demand = historical_avg * 0.85
+                else:
+                    trend = "stable"
+                    predicted_demand = historical_avg
+                
+                confidence = 0.75 + random.uniform(0, 0.20)
+                
+                forecasts.append(DemandForecast(
+                    material_id=mat_id,
+                    material_name=material['name'] if material else 'Unknown',
+                    forecast_period_days=forecast_days,
+                    predicted_demand=predicted_demand * forecast_days / 30,
+                    confidence_score=confidence,
+                    historical_avg=historical_avg,
+                    trend=trend
+                ))
+        
+        return {
+            'forecast_period_days': forecast_days,
+            'forecasts': [f.dict() for f in forecasts],
+            'total_predicted_demand': sum(f.predicted_demand for f in forecasts)
+        }
+        
+    except Exception as e:
+        logger.error(f"Demand forecasting error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# 2. PREDICTIVE RAKE/WAGON AVAILABILITY
+@api_router.get("/ai/availability-forecast")
+async def forecast_availability(days_ahead: int = 7):
+    """Forecast rake and wagon availability"""
+    try:
+        current_available_wagons = await db.wagons.count_documents({'status': 'available'})
+        current_active_rakes = await db.rakes.count_documents({'status': {'$in': ['loading', 'in_transit']}})
+        
+        forecasts = []
+        
+        for day in range(1, days_ahead + 1):
+            forecast_date = datetime.utcnow() + timedelta(days=day)
+            
+            # Simulate availability forecast with seasonal patterns
+            base_availability = current_available_wagons
+            seasonal_factor = 1.0 + 0.1 * random.uniform(-1, 1)
+            predicted_wagons = int(base_availability * seasonal_factor)
+            
+            utilization = 1.0 - (predicted_wagons / 50)  # Assuming 50 total wagons
+            
+            forecasts.append(AvailabilityForecast(
+                resource_type="wagon",
+                forecast_date=forecast_date,
+                predicted_available=predicted_wagons,
+                current_available=current_available_wagons,
+                utilization_forecast=utilization
+            ))
+        
+        return {
+            'forecasts': [f.dict() for f in forecasts],
+            'current_available_wagons': current_available_wagons,
+            'average_predicted_availability': sum(f.predicted_available for f in forecasts) / len(forecasts)
+        }
+        
+    except Exception as e:
+        logger.error(f"Availability forecasting error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# 3. AI-BASED DELAY PREDICTION
+@api_router.post("/ai/delay-prediction")
+async def predict_delays(request: Dict[str, Any]):
+    """Predict potential delays using AI (weather, congestion, etc.)"""
+    try:
+        rake_ids = request.get('rake_ids', [])
+        
+        predictions = []
+        
+        for rake_id in rake_ids:
+            rake = await db.rakes.find_one({'_id': ObjectId(rake_id)})
+            if not rake:
+                continue
+            
+            rake = obj_to_dict(rake)
+            
+            # Simulate delay prediction factors
+            weather_factors = ["Clear", "Light Rain", "Heavy Rain", "Fog", "Storm"]
+            weather = random.choice(weather_factors)
+            
+            # Calculate delay probability
+            base_delay = 0
+            factors = []
+            
+            if weather in ["Heavy Rain", "Storm"]:
+                base_delay += 2.5
+                factors.append(f"Weather: {weather}")
+            elif weather == "Fog":
+                base_delay += 1.5
+                factors.append(f"Weather: {weather}")
+            
+            # Congestion simulation
+            congestion_level = random.choice(["Low", "Medium", "High"])
+            if congestion_level == "High":
+                base_delay += 3.0
+                factors.append("High route congestion")
+            elif congestion_level == "Medium":
+                base_delay += 1.5
+                factors.append("Moderate route congestion")
+            
+            # Equipment issues
+            if random.random() < 0.1:
+                base_delay += 2.0
+                factors.append("Potential equipment maintenance")
+            
+            delay_probability = min(0.95, base_delay / 10)
+            
+            prediction = DelayPrediction(
+                rake_id=rake_id,
+                predicted_delay_hours=base_delay,
+                delay_probability=delay_probability,
+                contributing_factors=factors,
+                weather_impact=weather,
+                congestion_impact=congestion_level
+            )
+            predictions.append(prediction)
+        
+        return {
+            'predictions': [p.dict() for p in predictions],
+            'high_risk_rakes': len([p for p in predictions if p.delay_probability > 0.5])
+        }
+        
+    except Exception as e:
+        logger.error(f"Delay prediction error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# 4. AI-BASED ANOMALY DETECTION
+@api_router.get("/ai/anomaly-detection")
+async def detect_anomalies():
+    """Detect anomalies in operations"""
+    try:
+        anomalies = []
+        
+        # Check wagon anomalies
+        wagons = await db.wagons.find().to_list(1000)
+        maintenance_wagons = [w for w in wagons if w.get('status') == 'maintenance']
+        
+        if len(maintenance_wagons) > len(wagons) * 0.2:
+            anomalies.append(AnomalyDetection(
+                anomaly_type="high_maintenance_rate",
+                entity_id="wagon_fleet",
+                entity_type="wagon",
+                severity="high",
+                description=f"Unusually high maintenance rate: {len(maintenance_wagons)} wagons ({len(maintenance_wagons)/len(wagons)*100:.1f}%)",
+                detected_at=datetime.utcnow(),
+                recommended_action="Review maintenance schedules and investigate root cause"
+            ))
+        
+        # Check loading delays
+        loading_rakes = await db.rakes.find({'status': 'loading'}).to_list(1000)
+        for rake in loading_rakes:
+            formation_time = rake.get('formation_date', datetime.utcnow())
+            if isinstance(formation_time, str):
+                formation_time = datetime.fromisoformat(formation_time)
+            
+            hours_loading = (datetime.utcnow() - formation_time).total_seconds() / 3600
+            
+            if hours_loading > 36:
+                anomalies.append(AnomalyDetection(
+                    anomaly_type="extended_loading_time",
+                    entity_id=str(rake['_id']),
+                    entity_type="rake",
+                    severity="critical",
+                    description=f"Rake has been loading for {hours_loading:.1f} hours (normal: <24h)",
+                    detected_at=datetime.utcnow(),
+                    recommended_action="Investigate loading bottleneck and expedite completion"
+                ))
+        
+        # Check inventory anomalies
+        inventories = await db.inventory.find().to_list(1000)
+        for inv in inventories:
+            stockyard = await db.stockyards.find_one({'_id': inv['stockyard_id']})
+            if stockyard and inv['quantity'] < stockyard['capacity'] * 0.1:
+                anomalies.append(AnomalyDetection(
+                    anomaly_type="low_inventory",
+                    entity_id=str(inv['_id']),
+                    entity_type="inventory",
+                    severity="medium",
+                    description=f"Inventory critically low at {inv['quantity']} MT",
+                    detected_at=datetime.utcnow(),
+                    recommended_action="Schedule immediate replenishment"
+                ))
+        
+        return {
+            'timestamp': datetime.utcnow(),
+            'total_anomalies': len(anomalies),
+            'critical_anomalies': len([a for a in anomalies if a.severity == "critical"]),
+            'anomalies': [a.dict() for a in anomalies]
+        }
+        
+    except Exception as e:
+        logger.error(f"Anomaly detection error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# 5. AI-BASED STOCK TRANSFER RECOMMENDATIONS
+@api_router.get("/ai/stock-transfer-recommendations")
+async def recommend_stock_transfers():
+    """AI-powered recommendations for inter-stockyard transfers"""
+    try:
+        recommendations = []
+        
+        # Fetch all stockyards and inventory
+        stockyards = await db.stockyards.find().to_list(100)
+        inventories = await db.inventory.find().to_list(1000)
+        
+        # Group inventory by stockyard and material
+        stockyard_inventory = {}
+        for inv in inventories:
+            sy_id = str(inv['stockyard_id'])
+            mat_id = str(inv['material_id'])
+            
+            if sy_id not in stockyard_inventory:
+                stockyard_inventory[sy_id] = {}
+            stockyard_inventory[sy_id][mat_id] = inv['quantity']
+        
+        # Identify imbalances
+        for mat_id in set(mat_id for sy in stockyard_inventory.values() for mat_id in sy.keys()):
+            quantities = [(sy_id, stockyard_inventory[sy_id].get(mat_id, 0)) for sy_id in stockyard_inventory.keys()]
+            quantities.sort(key=lambda x: x[1])
+            
+            if len(quantities) >= 2:
+                lowest = quantities[0]
+                highest = quantities[-1]
+                
+                if highest[1] > lowest[1] * 2 and lowest[1] < 5000:  # Significant imbalance
+                    transfer_qty = (highest[1] - lowest[1]) / 2
+                    
+                    material = await db.materials.find_one({'_id': ObjectId(mat_id)})
+                    
+                    recommendations.append(StockTransferRecommendation(
+                        from_stockyard_id=highest[0],
+                        to_stockyard_id=lowest[0],
+                        material_id=mat_id,
+                        recommended_quantity=transfer_qty,
+                        reason=f"Balance inventory levels (from {highest[1]:.0f} MT to {lowest[1]:.0f} MT)",
+                        cost_benefit=transfer_qty * 10  # ₹10 per MT transport cost savings
+                    ))
+        
+        return {
+            'timestamp': datetime.utcnow(),
+            'total_recommendations': len(recommendations),
+            'recommendations': [r.dict() for r in recommendations]
+        }
+        
+    except Exception as e:
+        logger.error(f"Stock transfer recommendation error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# 6. WHAT-IF SCENARIO SIMULATION
+@api_router.post("/ai/scenario-simulation")
+async def simulate_scenario(request: Dict[str, Any]):
+    """Run what-if scenario simulations"""
+    try:
+        scenario_name = request.get('scenario_name')
+        parameters = request.get('parameters', {})
+        
+        # Baseline metrics
+        current_orders = await db.orders.count_documents({'status': 'pending'})
+        current_wagons = await db.wagons.count_documents({'status': 'available'})
+        current_rakes = await db.rakes.count_documents({})
+        
+        # Simulate scenario outcomes
+        outcomes = {}
+        
+        if 'additional_wagons' in parameters:
+            additional = parameters['additional_wagons']
+            outcomes['wagon_availability'] = current_wagons + additional
+            outcomes['capacity_increase_percent'] = (additional / current_wagons) * 100
+            outcomes['additional_orders_capacity'] = additional * 60  # MT per wagon
+        
+        if 'demand_increase_percent' in parameters:
+            increase = parameters['demand_increase_percent']
+            outcomes['projected_orders'] = current_orders * (1 + increase / 100)
+            outcomes['additional_wagons_needed'] = int((current_orders * increase / 100) * 2)
+        
+        if 'loading_efficiency_improvement' in parameters:
+            improvement = parameters['loading_efficiency_improvement']
+            current_avg_loading_time = 4.5
+            improved_time = current_avg_loading_time * (1 - improvement / 100)
+            outcomes['new_loading_time_hours'] = improved_time
+            outcomes['additional_rakes_per_day'] = (24 / improved_time) - (24 / current_avg_loading_time)
+        
+        # Risk assessment
+        risk_factors = []
+        if outcomes.get('additional_wagons_needed', 0) > current_wagons * 0.5:
+            risk_factors.append("High: Requires significant wagon fleet expansion")
+        if outcomes.get('capacity_increase_percent', 0) > 30:
+            risk_factors.append("Medium: Infrastructure may need upgrade")
+        
+        risk_assessment = "; ".join(risk_factors) if risk_factors else "Low: Scenario is feasible with current resources"
+        
+        scenario = WhatIfScenario(
+            scenario_name=scenario_name,
+            parameters=parameters,
+            predicted_outcomes=outcomes,
+            risk_assessment=risk_assessment
+        )
+        
+        return scenario.dict()
+        
+    except Exception as e:
+        logger.error(f"Scenario simulation error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# 7. AI-BASED PRODUCTION SUGGESTION
+@api_router.post("/ai/production-suggestions")
+async def get_production_suggestions():
+    """AI-powered production planning suggestions"""
+    try:
+        # Analyze demand vs inventory
+        orders = await db.orders.find({'status': 'pending'}).to_list(1000)
+        inventories = await db.inventory.find().to_list(1000)
+        
+        # Group by material
+        demand_by_material = {}
+        supply_by_material = {}
+        
+        for order in orders:
+            mat_id = str(order['material_id'])
+            demand_by_material[mat_id] = demand_by_material.get(mat_id, 0) + order['quantity']
+        
+        for inv in inventories:
+            mat_id = str(inv['material_id'])
+            supply_by_material[mat_id] = supply_by_material.get(mat_id, 0) + inv['quantity']
+        
+        suggestions = []
+        
+        for mat_id in demand_by_material.keys():
+            demand = demand_by_material[mat_id]
+            supply = supply_by_material.get(mat_id, 0)
+            
+            material = await db.materials.find_one({'_id': ObjectId(mat_id)})
+            mat_name = material['name'] if material else 'Unknown'
+            
+            if supply < demand:
+                shortage = demand - supply
+                suggestions.append({
+                    'material_id': mat_id,
+                    'material_name': mat_name,
+                    'action': 'increase_production',
+                    'current_supply': supply,
+                    'current_demand': demand,
+                    'shortage': shortage,
+                    'recommended_production': shortage * 1.2,  # 20% buffer
+                    'priority': 'high' if shortage > 5000 else 'medium',
+                    'reasoning': f"Current demand ({demand} MT) exceeds supply ({supply} MT) by {shortage} MT"
+                })
+            elif supply > demand * 2:
+                excess = supply - demand
+                suggestions.append({
+                    'material_id': mat_id,
+                    'material_name': mat_name,
+                    'action': 'reduce_production',
+                    'current_supply': supply,
+                    'current_demand': demand,
+                    'excess': excess,
+                    'recommended_reduction': excess * 0.5,
+                    'priority': 'low',
+                    'reasoning': f"Significant excess inventory ({excess} MT) - consider reducing production"
+                })
+        
+        return {
+            'timestamp': datetime.utcnow(),
+            'total_suggestions': len(suggestions),
+            'suggestions': suggestions
+        }
+        
+    except Exception as e:
+        logger.error(f"Production suggestions error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# 8. ENHANCED PRESCRIPTIVE AI OPTIMIZATION (Multi-objective)
+@api_router.post("/ai/prescriptive-optimization")
+async def prescriptive_multi_objective_optimization(request: Dict[str, Any]):
+    """Multi-objective AI optimization (cost + SLA + utilization)"""
+    try:
+        order_ids = request.get('order_ids', [])
+        objectives = request.get('objectives', {
+            'minimize_cost': 0.4,
+            'maximize_sla_compliance': 0.3,
+            'maximize_utilization': 0.3
+        })
+        
+        # Use AI for sophisticated optimization
+        orders_data = []
+        for order_id in order_ids:
+            order = await db.orders.find_one({'_id': ObjectId(order_id)})
+            if order:
+                order = obj_to_dict(order)
+                material = await db.materials.find_one({'_id': ObjectId(order['material_id'])})
+                order['material_name'] = material['name'] if material else None
+                orders_data.append(order)
+        
+        # Fetch resources
+        wagons = await db.wagons.find({'status': 'available'}).to_list(100)
+        wagons_data = [obj_to_dict(w) for w in wagons]
+        
+        stockyards = await db.stockyards.find().to_list(100)
+        stockyards_data = [obj_to_dict(s) for s in stockyards]
+        
+        prompt = f"""
+You are an advanced logistics optimization AI. Perform multi-objective optimization with the following priorities:
+- Minimize cost: {objectives['minimize_cost']*100}%
+- Maximize SLA compliance: {objectives['maximize_sla_compliance']*100}%
+- Maximize utilization: {objectives['maximize_utilization']*100}%
+
+**Orders:**
+{json.dumps(orders_data, indent=2, default=str)}
+
+**Available Wagons:**
+{json.dumps(wagons_data, indent=2, default=str)}
+
+**Stockyards:**
+{json.dumps(stockyards_data, indent=2, default=str)}
+
+Provide optimization recommendations balancing all three objectives. Include:
+1. Optimal rake formations
+2. Cost vs SLA tradeoffs
+3. Utilization improvements
+4. Risk mitigation strategies
+
+Return JSON format with recommendations and scores for each objective.
+"""
+        
+        # Initialize AI
+        llm_chat = LlmChat(
+            api_key=os.environ['EMERGENT_LLM_KEY'],
+            session_id=f"multi_obj_opt_{datetime.utcnow().timestamp()}",
+            system_message="You are an expert multi-objective optimization AI for logistics."
+        ).with_model("openai", "gpt-4o")
+        
+        user_message = UserMessage(text=prompt)
+        response = await llm_chat.send_message(user_message)
+        
+        # Parse response
+        try:
+            response_text = response.strip()
+            if '```json' in response_text:
+                response_text = response_text.split('```json')[1].split('```')[0].strip()
+            elif '```' in response_text:
+                response_text = response_text.split('```')[1].split('```')[0].strip()
+            
+            optimization_result = json.loads(response_text)
+        except:
+            optimization_result = {'explanation': response}
+        
+        return {
+            'objectives': objectives,
+            'orders_analyzed': len(orders_data),
+            'optimization_result': optimization_result,
+            'timestamp': datetime.utcnow()
+        }
+        
+    except Exception as e:
+        logger.error(f"Prescriptive optimization error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @api_router.get("/")
 async def root():
     return {"message": "Advanced Rake Formation Control Room API is running"}
