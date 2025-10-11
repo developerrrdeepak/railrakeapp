@@ -368,8 +368,202 @@ test_plan:
   test_all: false
   test_priority: "high_first"
 
+  - task: "Cost & Efficiency Optimization - Wagon Utilization Maximization"
+    implemented: true
+    working: "NA"
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Wagon utilization analysis and optimization endpoints created. Ensures no partial loading."
+  
+  - task: "Cost & Efficiency Optimization - Real-time Demurrage Tracking & Alerts"
+    implemented: true
+    working: "NA"
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Active demurrage alerts and total cost tracking implemented."
+  
+  - task: "Cost & Efficiency Optimization - Freight Rate Comparison (Rail vs Road)"
+    implemented: true
+    working: "NA"
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Freight rate comparison engine with rail/road mode analysis and CO2 emissions."
+  
+  - task: "Cost & Efficiency Optimization - Combined Rail-Road Multimodal Optimization"
+    implemented: true
+    working: "NA"
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Multimodal transport optimization comparing pure rail, pure road, and combined modes."
+  
+  - task: "Cost & Efficiency Optimization - Route Optimization (Cost/Time/Distance/Emission)"
+    implemented: true
+    working: "NA"
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Route optimization engine with multiple criteria support."
+  
+  - task: "Cost & Efficiency Optimization - Penalty & Delay Predictive Alerts"
+    implemented: true
+    working: "NA"
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Predictive penalty alerts system with mitigation actions."
+  
+  - task: "Cost & Efficiency Optimization - Loading Time Optimization"
+    implemented: true
+    working: "NA"
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Loading time analysis with bottleneck identification and recommendations."
+  
+  - task: "Cost & Efficiency Optimization - CO2 Emission & Energy Efficient Routes"
+    implemented: true
+    working: "NA"
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "CO2 analysis for route options with efficiency ratings."
+  
+  - task: "AI & ML Intelligence - Predictive Demand Forecasting"
+    implemented: true
+    working: "NA"
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Historical demand analysis with trend forecasting."
+  
+  - task: "AI & ML Intelligence - Predictive Rake/Wagon Availability Forecasting"
+    implemented: true
+    working: "NA"
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Resource availability forecasting with utilization predictions."
+  
+  - task: "AI & ML Intelligence - AI-based Delay Prediction"
+    implemented: true
+    working: "NA"
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Delay prediction with weather and congestion simulation (ready for real data integration)."
+  
+  - task: "AI & ML Intelligence - AI-based Anomaly Detection"
+    implemented: true
+    working: "NA"
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Automated anomaly detection for operations, maintenance, and inventory."
+  
+  - task: "AI & ML Intelligence - AI-based Stock Transfer Recommendations"
+    implemented: true
+    working: "NA"
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Inter-stockyard transfer optimization based on inventory imbalances."
+  
+  - task: "AI & ML Intelligence - What-If Scenario Simulation Engine"
+    implemented: true
+    working: "NA"
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Scenario simulation with risk assessment and outcome prediction."
+  
+  - task: "AI & ML Intelligence - AI-based Production Suggestions"
+    implemented: true
+    working: "NA"
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Production planning recommendations based on demand vs supply analysis."
+  
+  - task: "AI & ML Intelligence - Enhanced Prescriptive Multi-objective AI Optimization"
+    implemented: true
+    working: "NA"
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Advanced multi-objective optimization using GPT-4o (cost + SLA + utilization)."
+
 agent_communication:
     - agent: "main"
       message: "Initial MVP completed with all core features. Backend tested with curl and working. Frontend needs bundle testing and E2E testing."
     - agent: "testing"
       message: "Comprehensive backend testing completed successfully. All 11 advanced control room features tested and working: 1) Real-time wagon tracking (fixed ObjectId issues), 2) Compatibility matrix management, 3) Route validation system, 4) Multi-destination rake formation, 5) Capacity monitoring with real-time data, 6) ERP integration framework, 7) Workflow management with approvals (fixed ObjectId issues), 8) Advanced analytics and performance metrics, 9) Control room dashboard with comprehensive data, 10) Report generation system, 11) WebSocket real-time updates. AI optimization working correctly with GPT-4o integration. Sample data initialization includes all advanced features. All 27 test cases passed (100% success rate). Backend is production-ready."
+    - agent: "main"
+      message: "Added 16 new advanced features for production deployment: 8 Cost & Efficiency Optimization features (wagon utilization, demurrage tracking, freight comparison, multimodal optimization, route optimization, penalty alerts, loading time optimization, CO2 analysis) + 8 AI/ML Intelligence features (demand forecasting, availability forecasting, delay prediction, anomaly detection, stock transfer recommendations, scenario simulation, production suggestions, multi-objective optimization). All features use GPT-4o via Emergent LLM key. Ready for comprehensive backend testing."
