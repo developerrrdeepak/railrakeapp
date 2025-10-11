@@ -386,6 +386,249 @@ class AdvancedBackendTester:
             self.log_test("AI Optimization", False, f"Error: {str(e)}")
             return False
     
+    def test_cost_efficiency_optimization(self):
+        """Test all 8 Cost & Efficiency Optimization endpoints"""
+        try:
+            # Get sample data for testing
+            orders_response = self.session.get(f"{BACKEND_URL}/orders")
+            rakes_response = self.session.get(f"{BACKEND_URL}/rakes")
+            lp_response = self.session.get(f"{BACKEND_URL}/loading-points")
+            
+            if orders_response.status_code != 200:
+                self.log_test("Cost Optimization - Get Data", False, "Failed to get orders")
+                return False
+                
+            orders = orders_response.json()
+            rakes = rakes_response.json() if rakes_response.status_code == 200 else []
+            loading_points = lp_response.json() if lp_response.status_code == 200 else []
+            
+            order_ids = [order["id"] for order in orders[:3]]
+            rake_ids = [rake["id"] for rake in rakes[:2]]
+            loading_point_ids = [lp["id"] for lp in loading_points[:1]]
+            
+            success_count = 0
+            total_tests = 10
+            
+            # 1. Wagon Utilization Analysis
+            if rake_ids:
+                data = {"rake_id": rake_ids[0], "order_ids": order_ids}
+                response = self.session.post(f"{BACKEND_URL}/wagon-utilization/analyze", json=data)
+                if response.status_code == 200:
+                    self.log_test("Wagon Utilization Analysis", True, "Analysis completed")
+                    success_count += 1
+                else:
+                    self.log_test("Wagon Utilization Analysis", False, f"Status: {response.status_code}")
+            
+            # 2. Wagon Utilization Optimization
+            if order_ids:
+                data = {"order_ids": order_ids}
+                response = self.session.post(f"{BACKEND_URL}/wagon-utilization/optimize", json=data)
+                if response.status_code == 200:
+                    self.log_test("Wagon Utilization Optimization", True, "Optimization completed")
+                    success_count += 1
+                else:
+                    self.log_test("Wagon Utilization Optimization", False, f"Status: {response.status_code}")
+            
+            # 3. Active Demurrage Alerts
+            response = self.session.get(f"{BACKEND_URL}/demurrage/active-alerts")
+            if response.status_code == 200:
+                alerts = response.json()
+                self.log_test("Active Demurrage Alerts", True, f"Retrieved {len(alerts) if isinstance(alerts, list) else 'N/A'} alerts")
+                success_count += 1
+            else:
+                self.log_test("Active Demurrage Alerts", False, f"Status: {response.status_code}")
+            
+            # 4. Total Demurrage Cost
+            response = self.session.get(f"{BACKEND_URL}/demurrage/total-cost")
+            if response.status_code == 200:
+                cost_data = response.json()
+                self.log_test("Total Demurrage Cost", True, f"Cost data retrieved")
+                success_count += 1
+            else:
+                self.log_test("Total Demurrage Cost", False, f"Status: {response.status_code}")
+            
+            # 5. Freight Rate Comparison
+            params = {"origin": "Plant North", "destination": "Mumbai", "weight_tons": 100}
+            response = self.session.get(f"{BACKEND_URL}/freight-rates/compare", params=params)
+            if response.status_code == 200:
+                comparison = response.json()
+                self.log_test("Freight Rate Comparison", True, "Comparison completed")
+                success_count += 1
+            else:
+                self.log_test("Freight Rate Comparison", False, f"Status: {response.status_code}")
+            
+            # 6. Multimodal Transport Optimization
+            data = {"origin": "Plant North", "destination": "Mumbai", "weight_tons": 100, "order_ids": order_ids}
+            response = self.session.post(f"{BACKEND_URL}/transport/multimodal-optimization", json=data)
+            if response.status_code == 200:
+                optimization = response.json()
+                self.log_test("Multimodal Transport Optimization", True, "Optimization completed")
+                success_count += 1
+            else:
+                self.log_test("Multimodal Transport Optimization", False, f"Status: {response.status_code}")
+            
+            # 7. Route Optimization (test all criteria)
+            criteria_list = ["cost", "time", "distance", "emission"]
+            route_success = 0
+            for criteria in criteria_list:
+                data = {"origin": "Plant North", "destination": "Mumbai", "criteria": criteria, "weight_tons": 100}
+                response = self.session.post(f"{BACKEND_URL}/route/optimize", json=data)
+                if response.status_code == 200:
+                    route_success += 1
+                    self.log_test(f"Route Optimization ({criteria})", True, f"Optimization for {criteria} completed")
+                else:
+                    self.log_test(f"Route Optimization ({criteria})", False, f"Status: {response.status_code}")
+            
+            if route_success == len(criteria_list):
+                success_count += 1
+            
+            # 8. Penalty Alerts
+            response = self.session.get(f"{BACKEND_URL}/penalties/alerts")
+            if response.status_code == 200:
+                alerts = response.json()
+                self.log_test("Penalty Alerts", True, f"Retrieved penalty alerts")
+                success_count += 1
+            else:
+                self.log_test("Penalty Alerts", False, f"Status: {response.status_code}")
+            
+            # 9. Loading Time Optimization
+            if loading_point_ids:
+                response = self.session.get(f"{BACKEND_URL}/loading/optimization/{loading_point_ids[0]}")
+                if response.status_code == 200:
+                    optimization = response.json()
+                    self.log_test("Loading Time Optimization", True, "Optimization completed")
+                    success_count += 1
+                else:
+                    self.log_test("Loading Time Optimization", False, f"Status: {response.status_code}")
+            
+            # 10. CO2 Analysis
+            data = {"origin": "Plant North", "destination": "Mumbai", "weight_tons": 100}
+            response = self.session.post(f"{BACKEND_URL}/route/co2-analysis", json=data)
+            if response.status_code == 200:
+                co2_analysis = response.json()
+                self.log_test("CO2 Analysis", True, "Analysis completed")
+                success_count += 1
+            else:
+                self.log_test("CO2 Analysis", False, f"Status: {response.status_code}")
+            
+            return success_count >= 7  # At least 70% success rate
+            
+        except Exception as e:
+            self.log_test("Cost & Efficiency Optimization", False, f"Error: {str(e)}")
+            return False
+    
+    def test_ai_ml_intelligence(self):
+        """Test all 8 AI & ML Intelligence endpoints"""
+        try:
+            # Get sample data for testing
+            orders_response = self.session.get(f"{BACKEND_URL}/orders")
+            rakes_response = self.session.get(f"{BACKEND_URL}/rakes")
+            
+            if orders_response.status_code != 200:
+                self.log_test("AI/ML Intelligence - Get Data", False, "Failed to get orders")
+                return False
+                
+            orders = orders_response.json()
+            rakes = rakes_response.json() if rakes_response.status_code == 200 else []
+            
+            order_ids = [order["id"] for order in orders[:3]]
+            rake_ids = [rake["id"] for rake in rakes[:2]]
+            
+            success_count = 0
+            total_tests = 8
+            
+            # 1. Demand Forecasting
+            data = {"forecast_days": 30}
+            response = self.session.post(f"{BACKEND_URL}/ai/demand-forecast", json=data)
+            if response.status_code == 200:
+                forecast = response.json()
+                self.log_test("AI Demand Forecasting", True, "Forecasting completed")
+                success_count += 1
+            else:
+                self.log_test("AI Demand Forecasting", False, f"Status: {response.status_code}")
+            
+            # 2. Availability Forecasting
+            params = {"days_ahead": 7}
+            response = self.session.get(f"{BACKEND_URL}/ai/availability-forecast", params=params)
+            if response.status_code == 200:
+                availability = response.json()
+                self.log_test("AI Availability Forecasting", True, "Forecasting completed")
+                success_count += 1
+            else:
+                self.log_test("AI Availability Forecasting", False, f"Status: {response.status_code}")
+            
+            # 3. Delay Prediction
+            if rake_ids:
+                data = {"rake_ids": rake_ids}
+                response = self.session.post(f"{BACKEND_URL}/ai/delay-prediction", json=data)
+                if response.status_code == 200:
+                    predictions = response.json()
+                    self.log_test("AI Delay Prediction", True, "Prediction completed")
+                    success_count += 1
+                else:
+                    self.log_test("AI Delay Prediction", False, f"Status: {response.status_code}")
+            
+            # 4. Anomaly Detection
+            response = self.session.get(f"{BACKEND_URL}/ai/anomaly-detection")
+            if response.status_code == 200:
+                anomalies = response.json()
+                self.log_test("AI Anomaly Detection", True, f"Detection completed")
+                success_count += 1
+            else:
+                self.log_test("AI Anomaly Detection", False, f"Status: {response.status_code}")
+            
+            # 5. Stock Transfer Recommendations
+            response = self.session.get(f"{BACKEND_URL}/ai/stock-transfer-recommendations")
+            if response.status_code == 200:
+                recommendations = response.json()
+                self.log_test("AI Stock Transfer Recommendations", True, "Recommendations completed")
+                success_count += 1
+            else:
+                self.log_test("AI Stock Transfer Recommendations", False, f"Status: {response.status_code}")
+            
+            # 6. Scenario Simulation
+            data = {"scenario_name": "Test Scenario", "parameters": {"additional_wagons": 10}}
+            response = self.session.post(f"{BACKEND_URL}/ai/scenario-simulation", json=data)
+            if response.status_code == 200:
+                simulation = response.json()
+                self.log_test("AI Scenario Simulation", True, "Simulation completed")
+                success_count += 1
+            else:
+                self.log_test("AI Scenario Simulation", False, f"Status: {response.status_code}")
+            
+            # 7. Production Suggestions
+            response = self.session.post(f"{BACKEND_URL}/ai/production-suggestions", json={})
+            if response.status_code == 200:
+                suggestions = response.json()
+                self.log_test("AI Production Suggestions", True, "Suggestions completed")
+                success_count += 1
+            else:
+                self.log_test("AI Production Suggestions", False, f"Status: {response.status_code}")
+            
+            # 8. Prescriptive Multi-objective Optimization
+            if order_ids:
+                data = {
+                    "order_ids": order_ids,
+                    "objectives": {
+                        "minimize_cost": 0.4,
+                        "maximize_sla_compliance": 0.3,
+                        "maximize_utilization": 0.3
+                    }
+                }
+                response = self.session.post(f"{BACKEND_URL}/ai/prescriptive-optimization", json=data)
+                if response.status_code == 200:
+                    optimization = response.json()
+                    self.log_test("AI Prescriptive Multi-objective Optimization", True, "Optimization completed")
+                    success_count += 1
+                else:
+                    self.log_test("AI Prescriptive Multi-objective Optimization", False, f"Status: {response.status_code}")
+            
+            return success_count >= 6  # At least 75% success rate
+            
+        except Exception as e:
+            self.log_test("AI & ML Intelligence", False, f"Error: {str(e)}")
+            return False
+    
     async def test_websocket_real_time_updates(self):
         """Test WebSocket real-time updates"""
         try:
