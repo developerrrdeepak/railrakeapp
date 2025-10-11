@@ -13,7 +13,7 @@ import random
 import time
 
 # Backend URL from environment
-BACKEND_URL = "https://freight-genius-2.preview.emergentagent.com/api"
+BACKEND_URL = "https://rail-analytics-hub.preview.emergentagent.com/api"
 
 class AdvancedBackendTester:
     def __init__(self):
