@@ -14,765 +14,835 @@ import random
 # Backend URL from frontend .env
 BACKEND_URL = "https://rail-analytics-hub.preview.emergentagent.com/api"
 
-class AdvancedBackendTester:
+class BackendTester:
     def __init__(self):
+        self.base_url = BACKEND_URL
         self.session = requests.Session()
-        self.session.headers.update({'Content-Type': 'application/json'})
         self.test_results = []
-        self.sample_data_ids = {}
+        self.existing_ids = {}
         
-    def log_test(self, test_name, success, message="", response_data=None):
-        """Log test results"""
+    def log_result(self, test_name: str, success: bool, details: str = "", response_data: Any = None):
+        """Log test result"""
         result = {
             "test": test_name,
             "success": success,
-            "message": message,
-            "timestamp": datetime.now().isoformat(),
-            "response_data": response_data
+            "details": details,
+            "timestamp": datetime.now().isoformat()
         }
+        if response_data:
+            result["response_data"] = response_data
         self.test_results.append(result)
-        status = "✅ PASS" if success else "❌ FAIL"
-        print(f"{status}: {test_name} - {message}")
         
-    def test_basic_connectivity(self):
-        """Test basic API connectivity"""
+        status = "✅ PASS" if success else "❌ FAIL"
+        print(f"{status} {test_name}")
+        if details:
+            print(f"   Details: {details}")
+        if not success and response_data:
+            print(f"   Response: {response_data}")
+        print()
+
+    def get_existing_ids(self):
+        """Get existing IDs from database for testing"""
         try:
-            response = self.session.get(f"{BACKEND_URL}/")
-            if response.status_code == 200:
-                self.log_test("Basic Connectivity", True, "API is accessible")
-                return True
-            else:
-                self.log_test("Basic Connectivity", False, f"Status: {response.status_code}")
-                return False
-        except Exception as e:
-            self.log_test("Basic Connectivity", False, f"Connection error: {str(e)}")
-            return False
-    
-    def test_sample_data_initialization(self):
-        """Test sample data initialization with advanced features"""
-        try:
-            response = self.session.post(f"{BACKEND_URL}/initialize-sample-data")
-            if response.status_code == 200:
-                data = response.json()
-                self.log_test("Sample Data Initialization", True, data.get('message', 'Success'))
-                return True
-            else:
-                self.log_test("Sample Data Initialization", False, f"Status: {response.status_code}")
-                return False
-        except Exception as e:
-            self.log_test("Sample Data Initialization", False, f"Error: {str(e)}")
-            return False
-    
-    def test_real_time_wagon_tracking(self):
-        """Test real-time wagon tracking endpoints"""
-        try:
-            # Test get wagon tracking
-            response = self.session.get(f"{BACKEND_URL}/wagon-tracking")
-            if response.status_code == 200:
-                tracking_data = response.json()
-                self.log_test("Get Wagon Tracking", True, f"Retrieved {len(tracking_data)} tracking records")
-            else:
-                self.log_test("Get Wagon Tracking", False, f"Status: {response.status_code}")
-                return False
-            
-            # Test real-time tracking endpoint
-            response = self.session.get(f"{BACKEND_URL}/wagon-tracking/real-time")
-            if response.status_code == 200:
-                real_time_data = response.json()
-                wagon_count = len(real_time_data.get('wagons', []))
-                self.log_test("Real-time Wagon Tracking", True, f"Retrieved real-time data for {wagon_count} wagons")
-                return True
-            else:
-                self.log_test("Real-time Wagon Tracking", False, f"Status: {response.status_code}")
-                return False
-                
-        except Exception as e:
-            self.log_test("Real-time Wagon Tracking", False, f"Error: {str(e)}")
-            return False
-    
-    def test_compatibility_matrix(self):
-        """Test compatibility matrix management"""
-        try:
-            # Test get compatibility rules
-            response = self.session.get(f"{BACKEND_URL}/compatibility-rules")
-            if response.status_code == 200:
-                rules = response.json()
-                self.log_test("Get Compatibility Rules", True, f"Retrieved {len(rules)} compatibility rules")
-            else:
-                self.log_test("Get Compatibility Rules", False, f"Status: {response.status_code}")
-                return False
-            
-            # Test compatibility matrix for specific material type
-            response = self.session.get(f"{BACKEND_URL}/compatibility-matrix/Bulk")
-            if response.status_code == 200:
-                matrix = response.json()
-                material_type = matrix.get('material_type')
-                matrix_data = matrix.get('compatibility_matrix', {})
-                self.log_test("Compatibility Matrix", True, f"Retrieved matrix for {material_type} with {len(matrix_data)} wagon types")
-                return True
-            else:
-                self.log_test("Compatibility Matrix", False, f"Status: {response.status_code}")
-                return False
-                
-        except Exception as e:
-            self.log_test("Compatibility Matrix", False, f"Error: {str(e)}")
-            return False
-    
-    def test_route_validation(self):
-        """Test route validation system"""
-        try:
-            # Test get routes
-            response = self.session.get(f"{BACKEND_URL}/routes")
-            if response.status_code == 200:
-                routes = response.json()
-                self.log_test("Get Routes", True, f"Retrieved {len(routes)} routes")
-            else:
-                self.log_test("Get Routes", False, f"Status: {response.status_code}")
-                return False
-            
-            # Test route validation
-            validation_data = {
-                "origin": "Plant North",
-                "destination": "Mumbai",
-                "wagon_type": "BOXN"
-            }
-            response = self.session.post(f"{BACKEND_URL}/routes/validate", json=validation_data)
-            if response.status_code == 200:
-                validation_result = response.json()
-                is_valid = validation_result.get('valid', False)
-                message = validation_result.get('message', '')
-                self.log_test("Route Validation", True, f"Validation result: {is_valid} - {message}")
-                return True
-            else:
-                self.log_test("Route Validation", False, f"Status: {response.status_code}")
-                return False
-                
-        except Exception as e:
-            self.log_test("Route Validation", False, f"Error: {str(e)}")
-            return False
-    
-    def test_multi_destination_rake(self):
-        """Test multi-destination rake formation"""
-        try:
-            # Test get multi-destination rakes
-            response = self.session.get(f"{BACKEND_URL}/multi-destination-rakes")
+            # Get existing rakes
+            response = self.session.get(f"{self.base_url}/rakes")
             if response.status_code == 200:
                 rakes = response.json()
-                self.log_test("Get Multi-destination Rakes", True, f"Retrieved {len(rakes)} multi-destination rakes")
-            else:
-                self.log_test("Get Multi-destination Rakes", False, f"Status: {response.status_code}")
-                return False
+                if rakes:
+                    self.existing_ids['rake_id'] = rakes[0]['id']
             
-            # Test multi-destination optimization
-            optimization_data = {
-                "destinations": ["Mumbai", "Delhi"],
-                "max_wagons": 30
-            }
-            response = self.session.post(f"{BACKEND_URL}/optimize-multi-destination", json=optimization_data)
+            # Get existing wagons
+            response = self.session.get(f"{self.base_url}/wagons")
             if response.status_code == 200:
-                optimization_result = response.json()
-                destinations = optimization_result.get('destinations', [])
-                self.log_test("Multi-destination Optimization", True, f"AI optimization completed for {len(destinations)} destinations")
-                return True
-            else:
-                self.log_test("Multi-destination Optimization", False, f"Status: {response.status_code}")
-                return False
-                
-        except Exception as e:
-            self.log_test("Multi-destination Rake Formation", False, f"Error: {str(e)}")
-            return False
-    
-    def test_capacity_monitoring(self):
-        """Test capacity monitoring with real-time data"""
-        try:
-            # Test real-time capacity monitoring
-            response = self.session.get(f"{BACKEND_URL}/capacity-monitoring/real-time")
+                wagons = response.json()
+                if wagons:
+                    self.existing_ids['wagon_id'] = wagons[0]['id']
+            
+            # Get existing loading points
+            response = self.session.get(f"{self.base_url}/loading-points")
             if response.status_code == 200:
-                capacity_data = response.json()
-                loading_points = capacity_data.get('loading_points', [])
-                overall_util = capacity_data.get('overall_utilization', 0)
-                self.log_test("Real-time Capacity Monitoring", True, f"Retrieved capacity data for {len(loading_points)} loading points, overall utilization: {overall_util:.2f}")
-                return True
-            else:
-                self.log_test("Real-time Capacity Monitoring", False, f"Status: {response.status_code}")
-                return False
-                
-        except Exception as e:
-            self.log_test("Capacity Monitoring", False, f"Error: {str(e)}")
-            return False
-    
-    def test_erp_integration(self):
-        """Test ERP integration framework"""
-        try:
-            # Test ERP sync status
-            response = self.session.get(f"{BACKEND_URL}/erp-sync/status")
-            if response.status_code == 200:
-                sync_status = response.json()
-                recent_syncs = sync_status.get('recent_syncs', [])
-                systems_status = sync_status.get('systems_status', {})
-                self.log_test("ERP Sync Status", True, f"Retrieved {len(recent_syncs)} recent syncs, systems: {list(systems_status.keys())}")
-            else:
-                self.log_test("ERP Sync Status", False, f"Status: {response.status_code}")
-                return False
-            
-            # Test trigger ERP sync
-            sync_data = {"system_name": "SAP"}
-            response = self.session.post(f"{BACKEND_URL}/erp-sync/trigger", json=sync_data)
-            if response.status_code == 200:
-                trigger_result = response.json()
-                message = trigger_result.get('message', '')
-                self.log_test("ERP Sync Trigger", True, message)
-                return True
-            else:
-                self.log_test("ERP Sync Trigger", False, f"Status: {response.status_code}")
-                return False
-                
-        except Exception as e:
-            self.log_test("ERP Integration", False, f"Error: {str(e)}")
-            return False
-    
-    def test_workflow_management(self):
-        """Test workflow management with approvals"""
-        try:
-            # Test get pending approvals
-            response = self.session.get(f"{BACKEND_URL}/workflow/approvals/pending")
-            if response.status_code == 200:
-                pending_approvals = response.json()
-                self.log_test("Get Pending Approvals", True, f"Retrieved {len(pending_approvals)} pending approvals")
-                
-                # If there are pending approvals, test updating one
-                if pending_approvals:
-                    approval_id = pending_approvals[0].get('id')
-                    if approval_id:
-                        update_data = {
-                            "status": "approved",
-                            "comments": "Approved via automated testing"
-                        }
-                        response = self.session.put(f"{BACKEND_URL}/workflow/approvals/{approval_id}", json=update_data)
-                        if response.status_code == 200:
-                            self.log_test("Update Approval Status", True, "Successfully updated approval status")
-                        else:
-                            self.log_test("Update Approval Status", False, f"Status: {response.status_code}")
-                
-                return True
-            else:
-                self.log_test("Workflow Management", False, f"Status: {response.status_code}")
-                return False
-                
-        except Exception as e:
-            self.log_test("Workflow Management", False, f"Error: {str(e)}")
-            return False
-    
-    def test_advanced_analytics(self):
-        """Test advanced analytics and performance metrics"""
-        try:
-            # Test performance analytics
-            response = self.session.get(f"{BACKEND_URL}/analytics/performance")
-            if response.status_code == 200:
-                analytics = response.json()
-                kpis = analytics.get('kpis', {})
-                trends = analytics.get('trends', {})
-                self.log_test("Performance Analytics", True, f"Retrieved analytics with {len(kpis)} KPIs and {len(trends)} trend datasets")
-                return True
-            else:
-                self.log_test("Performance Analytics", False, f"Status: {response.status_code}")
-                return False
-                
-        except Exception as e:
-            self.log_test("Advanced Analytics", False, f"Error: {str(e)}")
-            return False
-    
-    def test_control_room_dashboard(self):
-        """Test control room dashboard with comprehensive data"""
-        try:
-            # Test control room dashboard
-            response = self.session.get(f"{BACKEND_URL}/control-room/dashboard")
-            if response.status_code == 200:
-                dashboard_data = response.json()
-                active_rakes = dashboard_data.get('active_rakes', {})
-                wagon_status = dashboard_data.get('wagon_status_summary', {})
-                stockyard_util = dashboard_data.get('stockyard_utilization', {})
-                alerts = dashboard_data.get('urgent_alerts', [])
-                kpis = dashboard_data.get('performance_kpis', {})
-                
-                self.log_test("Control Room Dashboard", True, 
-                    f"Dashboard loaded: {len(active_rakes)} rake statuses, {len(wagon_status)} wagon statuses, "
-                    f"{len(stockyard_util)} stockyards, {len(alerts)} alerts, {len(kpis)} KPIs")
-                return True
-            else:
-                self.log_test("Control Room Dashboard", False, f"Status: {response.status_code}")
-                return False
-                
-        except Exception as e:
-            self.log_test("Control Room Dashboard", False, f"Error: {str(e)}")
-            return False
-    
-    def test_report_generation(self):
-        """Test report generation system"""
-        try:
-            # Test report generation
-            report_request = {
-                "report_type": "performance",
-                "start_date": (datetime.utcnow() - timedelta(days=7)).isoformat(),
-                "end_date": datetime.utcnow().isoformat(),
-                "format": "csv",
-                "include_charts": True,
-                "email_recipients": []
-            }
-            
-            response = self.session.post(f"{BACKEND_URL}/reports/generate", json=report_request)
-            if response.status_code == 200:
-                report_response = response.json()
-                report_id = report_response.get('report_id')
-                download_url = report_response.get('download_url')
-                self.log_test("Report Generation", True, f"Report generated: {report_id}")
-                
-                # Test report download
-                if download_url:
-                    download_response = self.session.get(f"{BACKEND_URL.replace('/api', '')}{download_url}")
-                    if download_response.status_code == 200:
-                        self.log_test("Report Download", True, f"Report downloaded successfully, size: {len(download_response.content)} bytes")
-                    else:
-                        self.log_test("Report Download", False, f"Download status: {download_response.status_code}")
-                
-                return True
-            else:
-                self.log_test("Report Generation", False, f"Status: {response.status_code}")
-                return False
-                
-        except Exception as e:
-            self.log_test("Report Generation", False, f"Error: {str(e)}")
-            return False
-    
-    def test_ai_optimization(self):
-        """Test AI optimization for multi-destination works"""
-        try:
-            # First get some orders to optimize
-            response = self.session.get(f"{BACKEND_URL}/orders")
-            if response.status_code != 200:
-                self.log_test("AI Optimization - Get Orders", False, f"Status: {response.status_code}")
-                return False
-            
-            orders = response.json()
-            if not orders:
-                self.log_test("AI Optimization", False, "No orders available for optimization")
-                return False
-            
-            # Test AI optimization with first few orders
-            order_ids = [order['id'] for order in orders[:3]]
-            optimization_request = {
-                "order_ids": order_ids,
-                "max_cost": 100000,
-                "priority_weight": 0.7
-            }
-            
-            response = self.session.post(f"{BACKEND_URL}/optimize-rake", json=optimization_request)
-            if response.status_code == 200:
-                optimization_result = response.json()
-                recommended_rakes = optimization_result.get('recommended_rakes', [])
-                total_cost = optimization_result.get('total_cost', 0)
-                explanation = optimization_result.get('explanation', '')
-                
-                self.log_test("AI Optimization", True, 
-                    f"AI optimization completed: {len(recommended_rakes)} recommended rakes, "
-                    f"total cost: {total_cost}, explanation length: {len(explanation)} chars")
-                return True
-            else:
-                self.log_test("AI Optimization", False, f"Status: {response.status_code}")
-                return False
-                
-        except Exception as e:
-            self.log_test("AI Optimization", False, f"Error: {str(e)}")
-            return False
-    
-    def test_cost_efficiency_optimization(self):
-        """Test all 8 Cost & Efficiency Optimization endpoints"""
-        try:
-            # Get sample data for testing
-            orders_response = self.session.get(f"{BACKEND_URL}/orders")
-            rakes_response = self.session.get(f"{BACKEND_URL}/rakes")
-            lp_response = self.session.get(f"{BACKEND_URL}/loading-points")
-            
-            if orders_response.status_code != 200:
-                self.log_test("Cost Optimization - Get Data", False, "Failed to get orders")
-                return False
-                
-            orders = orders_response.json()
-            rakes = rakes_response.json() if rakes_response.status_code == 200 else []
-            loading_points = lp_response.json() if lp_response.status_code == 200 else []
-            
-            order_ids = [order["id"] for order in orders[:3]]
-            rake_ids = [rake["id"] for rake in rakes[:2]]
-            loading_point_ids = [lp["id"] for lp in loading_points[:1]]
-            
-            success_count = 0
-            total_tests = 10
-            
-            # 1. Wagon Utilization Analysis
-            if rake_ids:
-                data = {"rake_id": rake_ids[0], "order_ids": order_ids}
-                response = self.session.post(f"{BACKEND_URL}/wagon-utilization/analyze", json=data)
-                if response.status_code == 200:
-                    self.log_test("Wagon Utilization Analysis", True, "Analysis completed")
-                    success_count += 1
-                else:
-                    self.log_test("Wagon Utilization Analysis", False, f"Status: {response.status_code}")
-            
-            # 2. Wagon Utilization Optimization
-            if order_ids:
-                data = {"order_ids": order_ids}
-                response = self.session.post(f"{BACKEND_URL}/wagon-utilization/optimize", json=data)
-                if response.status_code == 200:
-                    self.log_test("Wagon Utilization Optimization", True, "Optimization completed")
-                    success_count += 1
-                else:
-                    self.log_test("Wagon Utilization Optimization", False, f"Status: {response.status_code}")
-            
-            # 3. Active Demurrage Alerts
-            response = self.session.get(f"{BACKEND_URL}/demurrage/active-alerts")
-            if response.status_code == 200:
-                alerts = response.json()
-                self.log_test("Active Demurrage Alerts", True, f"Retrieved {len(alerts) if isinstance(alerts, list) else 'N/A'} alerts")
-                success_count += 1
-            else:
-                self.log_test("Active Demurrage Alerts", False, f"Status: {response.status_code}")
-            
-            # 4. Total Demurrage Cost
-            response = self.session.get(f"{BACKEND_URL}/demurrage/total-cost")
-            if response.status_code == 200:
-                cost_data = response.json()
-                self.log_test("Total Demurrage Cost", True, f"Cost data retrieved")
-                success_count += 1
-            else:
-                self.log_test("Total Demurrage Cost", False, f"Status: {response.status_code}")
-            
-            # 5. Freight Rate Comparison
-            params = {"origin": "Plant North", "destination": "Mumbai", "weight_tons": 100}
-            response = self.session.get(f"{BACKEND_URL}/freight-rates/compare", params=params)
-            if response.status_code == 200:
-                comparison = response.json()
-                self.log_test("Freight Rate Comparison", True, "Comparison completed")
-                success_count += 1
-            else:
-                self.log_test("Freight Rate Comparison", False, f"Status: {response.status_code}")
-            
-            # 6. Multimodal Transport Optimization
-            data = {"origin": "Plant North", "destination": "Mumbai", "weight_tons": 100, "order_ids": order_ids}
-            response = self.session.post(f"{BACKEND_URL}/transport/multimodal-optimization", json=data)
-            if response.status_code == 200:
-                optimization = response.json()
-                self.log_test("Multimodal Transport Optimization", True, "Optimization completed")
-                success_count += 1
-            else:
-                self.log_test("Multimodal Transport Optimization", False, f"Status: {response.status_code}")
-            
-            # 7. Route Optimization (test all criteria)
-            criteria_list = ["cost", "time", "distance", "emission"]
-            route_success = 0
-            for criteria in criteria_list:
-                data = {"origin": "Plant North", "destination": "Mumbai", "criteria": criteria, "weight_tons": 100}
-                response = self.session.post(f"{BACKEND_URL}/route/optimize", json=data)
-                if response.status_code == 200:
-                    route_success += 1
-                    self.log_test(f"Route Optimization ({criteria})", True, f"Optimization for {criteria} completed")
-                else:
-                    self.log_test(f"Route Optimization ({criteria})", False, f"Status: {response.status_code}")
-            
-            if route_success == len(criteria_list):
-                success_count += 1
-            
-            # 8. Penalty Alerts
-            response = self.session.get(f"{BACKEND_URL}/penalties/alerts")
-            if response.status_code == 200:
-                alerts = response.json()
-                self.log_test("Penalty Alerts", True, f"Retrieved penalty alerts")
-                success_count += 1
-            else:
-                self.log_test("Penalty Alerts", False, f"Status: {response.status_code}")
-            
-            # 9. Loading Time Optimization
-            if loading_point_ids:
-                response = self.session.get(f"{BACKEND_URL}/loading/optimization/{loading_point_ids[0]}")
-                if response.status_code == 200:
-                    optimization = response.json()
-                    self.log_test("Loading Time Optimization", True, "Optimization completed")
-                    success_count += 1
-                else:
-                    self.log_test("Loading Time Optimization", False, f"Status: {response.status_code}")
-            
-            # 10. CO2 Analysis
-            data = {"origin": "Plant North", "destination": "Mumbai", "weight_tons": 100}
-            response = self.session.post(f"{BACKEND_URL}/route/co2-analysis", json=data)
-            if response.status_code == 200:
-                co2_analysis = response.json()
-                self.log_test("CO2 Analysis", True, "Analysis completed")
-                success_count += 1
-            else:
-                self.log_test("CO2 Analysis", False, f"Status: {response.status_code}")
-            
-            return success_count >= 7  # At least 70% success rate
-            
-        except Exception as e:
-            self.log_test("Cost & Efficiency Optimization", False, f"Error: {str(e)}")
-            return False
-    
-    def test_ai_ml_intelligence(self):
-        """Test all 8 AI & ML Intelligence endpoints"""
-        try:
-            # Get sample data for testing
-            orders_response = self.session.get(f"{BACKEND_URL}/orders")
-            rakes_response = self.session.get(f"{BACKEND_URL}/rakes")
-            
-            if orders_response.status_code != 200:
-                self.log_test("AI/ML Intelligence - Get Data", False, "Failed to get orders")
-                return False
-                
-            orders = orders_response.json()
-            rakes = rakes_response.json() if rakes_response.status_code == 200 else []
-            
-            order_ids = [order["id"] for order in orders[:3]]
-            rake_ids = [rake["id"] for rake in rakes[:2]]
-            
-            success_count = 0
-            total_tests = 8
-            
-            # 1. Demand Forecasting
-            data = {"forecast_days": 30}
-            response = self.session.post(f"{BACKEND_URL}/ai/demand-forecast", json=data)
-            if response.status_code == 200:
-                forecast = response.json()
-                self.log_test("AI Demand Forecasting", True, "Forecasting completed")
-                success_count += 1
-            else:
-                self.log_test("AI Demand Forecasting", False, f"Status: {response.status_code}")
-            
-            # 2. Availability Forecasting
-            params = {"days_ahead": 7}
-            response = self.session.get(f"{BACKEND_URL}/ai/availability-forecast", params=params)
-            if response.status_code == 200:
-                availability = response.json()
-                self.log_test("AI Availability Forecasting", True, "Forecasting completed")
-                success_count += 1
-            else:
-                self.log_test("AI Availability Forecasting", False, f"Status: {response.status_code}")
-            
-            # 3. Delay Prediction
-            if rake_ids:
-                data = {"rake_ids": rake_ids}
-                response = self.session.post(f"{BACKEND_URL}/ai/delay-prediction", json=data)
-                if response.status_code == 200:
-                    predictions = response.json()
-                    self.log_test("AI Delay Prediction", True, "Prediction completed")
-                    success_count += 1
-                else:
-                    self.log_test("AI Delay Prediction", False, f"Status: {response.status_code}")
-            
-            # 4. Anomaly Detection
-            response = self.session.get(f"{BACKEND_URL}/ai/anomaly-detection")
-            if response.status_code == 200:
-                anomalies = response.json()
-                self.log_test("AI Anomaly Detection", True, f"Detection completed")
-                success_count += 1
-            else:
-                self.log_test("AI Anomaly Detection", False, f"Status: {response.status_code}")
-            
-            # 5. Stock Transfer Recommendations
-            response = self.session.get(f"{BACKEND_URL}/ai/stock-transfer-recommendations")
-            if response.status_code == 200:
-                recommendations = response.json()
-                self.log_test("AI Stock Transfer Recommendations", True, "Recommendations completed")
-                success_count += 1
-            else:
-                self.log_test("AI Stock Transfer Recommendations", False, f"Status: {response.status_code}")
-            
-            # 6. Scenario Simulation
-            data = {"scenario_name": "Test Scenario", "parameters": {"additional_wagons": 10}}
-            response = self.session.post(f"{BACKEND_URL}/ai/scenario-simulation", json=data)
-            if response.status_code == 200:
-                simulation = response.json()
-                self.log_test("AI Scenario Simulation", True, "Simulation completed")
-                success_count += 1
-            else:
-                self.log_test("AI Scenario Simulation", False, f"Status: {response.status_code}")
-            
-            # 7. Production Suggestions
-            response = self.session.post(f"{BACKEND_URL}/ai/production-suggestions", json={})
-            if response.status_code == 200:
-                suggestions = response.json()
-                self.log_test("AI Production Suggestions", True, "Suggestions completed")
-                success_count += 1
-            else:
-                self.log_test("AI Production Suggestions", False, f"Status: {response.status_code}")
-            
-            # 8. Prescriptive Multi-objective Optimization
-            if order_ids:
-                data = {
-                    "order_ids": order_ids,
-                    "objectives": {
-                        "minimize_cost": 0.4,
-                        "maximize_sla_compliance": 0.3,
-                        "maximize_utilization": 0.3
-                    }
-                }
-                response = self.session.post(f"{BACKEND_URL}/ai/prescriptive-optimization", json=data)
-                if response.status_code == 200:
-                    optimization = response.json()
-                    self.log_test("AI Prescriptive Multi-objective Optimization", True, "Optimization completed")
-                    success_count += 1
-                else:
-                    self.log_test("AI Prescriptive Multi-objective Optimization", False, f"Status: {response.status_code}")
-            
-            return success_count >= 6  # At least 75% success rate
-            
-        except Exception as e:
-            self.log_test("AI & ML Intelligence", False, f"Error: {str(e)}")
-            return False
-    
-    async def test_websocket_real_time_updates(self):
-        """Test WebSocket real-time updates"""
-        try:
-            websocket_url = BACKEND_URL.replace('https://', 'wss://').replace('/api', '/ws/real-time-updates')
-            
-            async with websockets.connect(websocket_url) as websocket:
-                # Wait for a few updates
-                updates_received = 0
-                timeout = 15  # 15 seconds timeout
-                start_time = time.time()
-                
-                while updates_received < 3 and (time.time() - start_time) < timeout:
-                    try:
-                        message = await asyncio.wait_for(websocket.recv(), timeout=5)
-                        update_data = json.loads(message)
-                        updates_received += 1
-                        
-                        update_type = update_data.get('type', 'unknown')
-                        timestamp = update_data.get('timestamp', '')
-                        
-                    except asyncio.TimeoutError:
-                        break
-                
-                if updates_received > 0:
-                    self.log_test("WebSocket Real-time Updates", True, f"Received {updates_received} real-time updates")
-                    return True
-                else:
-                    self.log_test("WebSocket Real-time Updates", False, "No updates received within timeout")
-                    return False
+                loading_points = response.json()
+                if loading_points:
+                    self.existing_ids['loading_point_id'] = loading_points[0]['id']
                     
-        except Exception as e:
-            self.log_test("WebSocket Real-time Updates", False, f"Error: {str(e)}")
-            return False
-    
-    def test_all_basic_endpoints(self):
-        """Test all basic CRUD endpoints are still working"""
-        try:
-            endpoints_to_test = [
-                ("materials", "Materials"),
-                ("stockyards", "Stockyards"), 
-                ("inventory", "Inventory"),
-                ("orders", "Orders"),
-                ("wagons", "Wagons"),
-                ("loading-points", "Loading Points"),
-                ("rakes", "Rakes")
-            ]
-            
-            all_passed = True
-            for endpoint, name in endpoints_to_test:
-                response = self.session.get(f"{BACKEND_URL}/{endpoint}")
-                if response.status_code == 200:
-                    data = response.json()
-                    self.log_test(f"Get {name}", True, f"Retrieved {len(data)} records")
-                else:
-                    self.log_test(f"Get {name}", False, f"Status: {response.status_code}")
-                    all_passed = False
-            
-            # Test dashboard stats
-            response = self.session.get(f"{BACKEND_URL}/dashboard/stats")
-            if response.status_code == 200:
-                stats = response.json()
-                self.log_test("Dashboard Stats", True, f"Retrieved dashboard statistics")
-            else:
-                self.log_test("Dashboard Stats", False, f"Status: {response.status_code}")
-                all_passed = False
-            
-            return all_passed
+            print(f"Retrieved existing IDs: {self.existing_ids}")
             
         except Exception as e:
-            self.log_test("Basic Endpoints", False, f"Error: {str(e)}")
-            return False
-    
-    def run_all_tests(self):
-        """Run all tests systematically"""
-        print("🚀 Starting Comprehensive Advanced Backend Testing...")
-        print(f"Backend URL: {BACKEND_URL}")
-        print("=" * 80)
+            print(f"Warning: Could not retrieve existing IDs: {e}")
+
+    def test_iot_sensors_integration(self):
+        """Test IoT Sensors Integration endpoints"""
+        print("=== Testing IoT Sensors Integration ===")
         
-        # Test in priority order
-        tests = [
-            ("Basic Connectivity", self.test_basic_connectivity),
-            ("Sample Data Initialization", self.test_sample_data_initialization),
-            ("All Basic Endpoints", self.test_all_basic_endpoints),
-            ("Cost & Efficiency Optimization (8 endpoints)", self.test_cost_efficiency_optimization),
-            ("AI & ML Intelligence (8 endpoints)", self.test_ai_ml_intelligence),
-            ("Real-time Wagon Tracking", self.test_real_time_wagon_tracking),
-            ("Compatibility Matrix", self.test_compatibility_matrix),
-            ("Route Validation", self.test_route_validation),
-            ("Multi-destination Rake", self.test_multi_destination_rake),
-            ("Capacity Monitoring", self.test_capacity_monitoring),
-            ("ERP Integration", self.test_erp_integration),
-            ("Workflow Management", self.test_workflow_management),
-            ("Advanced Analytics", self.test_advanced_analytics),
-            ("Control Room Dashboard", self.test_control_room_dashboard),
-            ("Report Generation", self.test_report_generation),
-            ("AI Optimization", self.test_ai_optimization),
+        # Test 1: Create IoT sensor data with different sensor types and statuses
+        sensor_data_tests = [
+            {
+                "sensor_id": "TEMP_001",
+                "sensor_type": "temperature",
+                "loading_point_id": self.existing_ids.get('loading_point_id', 'test_lp_id'),
+                "value": 45.5,
+                "unit": "celsius",
+                "status": "normal",
+                "threshold_min": 0,
+                "threshold_max": 50,
+                "location": {"lat": 19.0760, "lng": 72.8777}
+            },
+            {
+                "sensor_id": "WEIGHT_001", 
+                "sensor_type": "weight",
+                "loading_point_id": self.existing_ids.get('loading_point_id', 'test_lp_id'),
+                "value": 58.2,
+                "unit": "tons",
+                "status": "warning",
+                "threshold_min": 0,
+                "threshold_max": 60,
+                "location": {"lat": 19.0760, "lng": 72.8777}
+            },
+            {
+                "sensor_id": "VIB_001",
+                "sensor_type": "vibration", 
+                "loading_point_id": self.existing_ids.get('loading_point_id', 'test_lp_id'),
+                "value": 8.5,
+                "unit": "mm/s",
+                "status": "critical",
+                "threshold_min": 0,
+                "threshold_max": 5,
+                "location": {"lat": 19.0760, "lng": 72.8777}
+            },
+            {
+                "sensor_id": "LOAD_001",
+                "sensor_type": "load_status",
+                "loading_point_id": self.existing_ids.get('loading_point_id', 'test_lp_id'), 
+                "value": 1,
+                "unit": "boolean",
+                "status": "normal",
+                "threshold_min": 0,
+                "threshold_max": 1,
+                "location": {"lat": 19.0760, "lng": 72.8777}
+            }
         ]
         
-        passed_tests = 0
-        total_tests = len(tests)
-        
-        for test_name, test_func in tests:
-            print(f"\n🔍 Testing: {test_name}")
+        for i, sensor_data in enumerate(sensor_data_tests):
             try:
-                if test_func():
-                    passed_tests += 1
+                response = self.session.post(f"{self.base_url}/iot/sensors", json=sensor_data)
+                if response.status_code == 200:
+                    result = response.json()
+                    self.log_result(f"IoT Sensor Creation - {sensor_data['sensor_type']} ({sensor_data['status']})", 
+                                  True, f"Sensor created with ID: {result.get('id')}")
+                else:
+                    self.log_result(f"IoT Sensor Creation - {sensor_data['sensor_type']}", 
+                                  False, f"Status: {response.status_code}", response.text)
             except Exception as e:
-                self.log_test(test_name, False, f"Unexpected error: {str(e)}")
-        
-        # Test WebSocket separately (async)
-        print(f"\n🔍 Testing: WebSocket Real-time Updates")
+                self.log_result(f"IoT Sensor Creation - {sensor_data['sensor_type']}", 
+                              False, f"Exception: {str(e)}")
+
+        # Test 2: Get real-time sensor data
         try:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            websocket_result = loop.run_until_complete(self.test_websocket_real_time_updates())
-            if websocket_result:
-                passed_tests += 1
-            total_tests += 1
-            loop.close()
+            response = self.session.get(f"{self.base_url}/iot/sensors/real-time")
+            if response.status_code == 200:
+                result = response.json()
+                self.log_result("IoT Real-time Data Retrieval", True, 
+                              f"Retrieved {len(result.get('sensors', []))} sensors")
+            else:
+                self.log_result("IoT Real-time Data Retrieval", False, 
+                              f"Status: {response.status_code}", response.text)
         except Exception as e:
-            self.log_test("WebSocket Real-time Updates", False, f"Unexpected error: {str(e)}")
-            total_tests += 1
+            self.log_result("IoT Real-time Data Retrieval", False, f"Exception: {str(e)}")
+
+        # Test 3: Get real-time sensor data with loading point filter
+        if self.existing_ids.get('loading_point_id'):
+            try:
+                response = self.session.get(f"{self.base_url}/iot/sensors/real-time", 
+                                          params={"loading_point_id": self.existing_ids['loading_point_id']})
+                if response.status_code == 200:
+                    result = response.json()
+                    self.log_result("IoT Real-time Data with Filter", True, 
+                                  f"Filtered data for loading point: {self.existing_ids['loading_point_id']}")
+                else:
+                    self.log_result("IoT Real-time Data with Filter", False, 
+                                  f"Status: {response.status_code}", response.text)
+            except Exception as e:
+                self.log_result("IoT Real-time Data with Filter", False, f"Exception: {str(e)}")
+
+    def test_smart_weighbridge_integration(self):
+        """Test Smart Weighbridge Integration endpoints"""
+        print("=== Testing Smart Weighbridge Integration ===")
+        
+        # Test 1: Create weighbridge readings with different statuses
+        weighbridge_tests = [
+            {
+                "wagon_id": self.existing_ids.get('wagon_id', 'test_wagon_id'),
+                "gross_weight": 58.5,
+                "tare_weight": 18.5,
+                "net_weight": 40.0,
+                "expected_weight": 40.0,
+                "variance_percentage": 0.0,
+                "status": "verified",
+                "operator_id": "OP001",
+                "weighbridge_id": "WB001"
+            },
+            {
+                "wagon_id": self.existing_ids.get('wagon_id', 'test_wagon_id'),
+                "gross_weight": 85.0,
+                "tare_weight": 18.5,
+                "net_weight": 66.5,
+                "expected_weight": 60.0,
+                "variance_percentage": 10.8,
+                "status": "overload",
+                "operator_id": "OP002", 
+                "weighbridge_id": "WB002"
+            },
+            {
+                "wagon_id": self.existing_ids.get('wagon_id', 'test_wagon_id'),
+                "gross_weight": 48.0,
+                "tare_weight": 18.5,
+                "net_weight": 29.5,
+                "expected_weight": 40.0,
+                "variance_percentage": -26.25,
+                "status": "underload",
+                "operator_id": "OP003",
+                "weighbridge_id": "WB003"
+            },
+            {
+                "wagon_id": self.existing_ids.get('wagon_id', 'test_wagon_id'),
+                "gross_weight": 72.0,
+                "tare_weight": 18.5,
+                "net_weight": 53.5,
+                "expected_weight": 40.0,
+                "variance_percentage": 33.75,
+                "status": "suspicious",
+                "operator_id": "OP004",
+                "weighbridge_id": "WB004"
+            }
+        ]
+        
+        for weighbridge_data in weighbridge_tests:
+            try:
+                response = self.session.post(f"{self.base_url}/weighbridge/reading", json=weighbridge_data)
+                if response.status_code == 200:
+                    result = response.json()
+                    self.log_result(f"Weighbridge Reading - {weighbridge_data['status']}", True, 
+                                  f"Reading created with variance: {weighbridge_data['variance_percentage']}%")
+                else:
+                    self.log_result(f"Weighbridge Reading - {weighbridge_data['status']}", False, 
+                                  f"Status: {response.status_code}", response.text)
+            except Exception as e:
+                self.log_result(f"Weighbridge Reading - {weighbridge_data['status']}", False, 
+                              f"Exception: {str(e)}")
+
+        # Test 2: Get weighbridge readings
+        try:
+            response = self.session.get(f"{self.base_url}/weighbridge/readings")
+            if response.status_code == 200:
+                result = response.json()
+                self.log_result("Weighbridge Readings Retrieval", True, 
+                              f"Retrieved {len(result.get('readings', []))} readings")
+            else:
+                self.log_result("Weighbridge Readings Retrieval", False, 
+                              f"Status: {response.status_code}", response.text)
+        except Exception as e:
+            self.log_result("Weighbridge Readings Retrieval", False, f"Exception: {str(e)}")
+
+        # Test 3: Get weighbridge readings with filters
+        if self.existing_ids.get('wagon_id'):
+            try:
+                response = self.session.get(f"{self.base_url}/weighbridge/readings", 
+                                          params={"wagon_id": self.existing_ids['wagon_id']})
+                if response.status_code == 200:
+                    result = response.json()
+                    self.log_result("Weighbridge Readings with Wagon Filter", True, 
+                                  f"Filtered readings for wagon: {self.existing_ids['wagon_id']}")
+                else:
+                    self.log_result("Weighbridge Readings with Wagon Filter", False, 
+                                  f"Status: {response.status_code}", response.text)
+            except Exception as e:
+                self.log_result("Weighbridge Readings with Wagon Filter", False, f"Exception: {str(e)}")
+
+        # Test 4: Get weighbridge readings with status filter
+        try:
+            response = self.session.get(f"{self.base_url}/weighbridge/readings", 
+                                      params={"status": "overload"})
+            if response.status_code == 200:
+                result = response.json()
+                self.log_result("Weighbridge Readings with Status Filter", True, 
+                              "Filtered readings by overload status")
+            else:
+                self.log_result("Weighbridge Readings with Status Filter", False, 
+                              f"Status: {response.status_code}", response.text)
+        except Exception as e:
+            self.log_result("Weighbridge Readings with Status Filter", False, f"Exception: {str(e)}")
+
+    def test_gps_tracking_enhancement(self):
+        """Test GPS Tracking Enhancement endpoints"""
+        print("=== Testing GPS Tracking Enhancement ===")
+        
+        # Test 1: Create GPS route progress updates
+        gps_progress_tests = [
+            {
+                "rake_id": self.existing_ids.get('rake_id', 'test_rake_id'),
+                "current_location": {"lat": 19.0760, "lng": 72.8777, "address": "Mumbai Central"},
+                "destination": {"lat": 28.6139, "lng": 77.2090, "address": "New Delhi"},
+                "progress_percentage": 25.5,
+                "estimated_arrival": (datetime.utcnow() + timedelta(hours=18)).isoformat(),
+                "speed_kmh": 45.2,
+                "distance_remaining_km": 850.5,
+                "route_status": "on_track"
+            },
+            {
+                "rake_id": self.existing_ids.get('rake_id', 'test_rake_id_2'),
+                "current_location": {"lat": 22.5726, "lng": 88.3639, "address": "Kolkata Junction"},
+                "destination": {"lat": 13.0827, "lng": 80.2707, "address": "Chennai Central"},
+                "progress_percentage": 60.0,
+                "estimated_arrival": (datetime.utcnow() + timedelta(hours=12)).isoformat(),
+                "speed_kmh": 52.8,
+                "distance_remaining_km": 420.0,
+                "route_status": "delayed"
+            }
+        ]
+        
+        for gps_data in gps_progress_tests:
+            try:
+                response = self.session.post(f"{self.base_url}/gps/route-progress", json=gps_data)
+                if response.status_code == 200:
+                    result = response.json()
+                    self.log_result(f"GPS Route Progress - {gps_data['route_status']}", True, 
+                                  f"Progress: {gps_data['progress_percentage']}%, Speed: {gps_data['speed_kmh']} km/h")
+                else:
+                    self.log_result(f"GPS Route Progress - {gps_data['route_status']}", False, 
+                                  f"Status: {response.status_code}", response.text)
+            except Exception as e:
+                self.log_result(f"GPS Route Progress - {gps_data['route_status']}", False, 
+                              f"Exception: {str(e)}")
+
+        # Test 2: Get specific rake progress
+        if self.existing_ids.get('rake_id'):
+            try:
+                response = self.session.get(f"{self.base_url}/gps/route-progress/{self.existing_ids['rake_id']}")
+                if response.status_code == 200:
+                    result = response.json()
+                    self.log_result("GPS Specific Rake Progress", True, 
+                                  f"Retrieved progress for rake: {self.existing_ids['rake_id']}")
+                else:
+                    self.log_result("GPS Specific Rake Progress", False, 
+                                  f"Status: {response.status_code}", response.text)
+            except Exception as e:
+                self.log_result("GPS Specific Rake Progress", False, f"Exception: {str(e)}")
+
+        # Test 3: Get all active rakes tracking data
+        try:
+            response = self.session.get(f"{self.base_url}/gps/all-active-rakes")
+            if response.status_code == 200:
+                result = response.json()
+                self.log_result("GPS All Active Rakes", True, 
+                              f"Retrieved tracking data for {len(result.get('active_rakes', []))} rakes")
+            else:
+                self.log_result("GPS All Active Rakes", False, 
+                              f"Status: {response.status_code}", response.text)
+        except Exception as e:
+            self.log_result("GPS All Active Rakes", False, f"Exception: {str(e)}")
+
+    def test_smart_alert_system(self):
+        """Test Smart Alert System endpoints"""
+        print("=== Testing Smart Alert System ===")
+        
+        # Test 1: Create alerts with different priorities and channels
+        alert_tests = [
+            {
+                "title": "Critical Temperature Alert",
+                "message": "Temperature sensor reading critical levels at Loading Point LP-1",
+                "priority": "critical",
+                "category": "safety",
+                "source": "iot_sensor",
+                "source_id": "TEMP_001",
+                "channels": ["sms", "email", "app"],
+                "recipients": ["operator@plant.com", "+919876543210"],
+                "metadata": {"sensor_type": "temperature", "value": 85.5, "threshold": 50}
+            },
+            {
+                "title": "Weighbridge Overload Alert",
+                "message": "Wagon W001 detected with 15% overload at Weighbridge WB-2",
+                "priority": "high",
+                "category": "operational",
+                "source": "weighbridge",
+                "source_id": "WB002",
+                "channels": ["email", "app"],
+                "recipients": ["supervisor@plant.com"],
+                "metadata": {"wagon_id": "W001", "overload_percentage": 15}
+            },
+            {
+                "title": "Route Delay Notification",
+                "message": "Rake R001 delayed by 2 hours due to signal issues",
+                "priority": "medium",
+                "category": "logistics",
+                "source": "gps_tracking",
+                "source_id": "R001",
+                "channels": ["app"],
+                "recipients": ["dispatcher@plant.com"],
+                "metadata": {"delay_hours": 2, "reason": "signal_issues"}
+            },
+            {
+                "title": "Maintenance Reminder",
+                "message": "Scheduled maintenance due for Loading Point LP-3",
+                "priority": "low",
+                "category": "maintenance",
+                "source": "maintenance_system",
+                "source_id": "LP003",
+                "channels": ["email"],
+                "recipients": ["maintenance@plant.com"],
+                "metadata": {"maintenance_type": "scheduled", "due_date": "2024-01-15"}
+            }
+        ]
+        
+        created_alert_ids = []
+        for alert_data in alert_tests:
+            try:
+                response = self.session.post(f"{self.base_url}/alerts", json=alert_data)
+                if response.status_code == 200:
+                    result = response.json()
+                    alert_id = result.get('id')
+                    created_alert_ids.append(alert_id)
+                    self.log_result(f"Alert Creation - {alert_data['priority']}", True, 
+                                  f"Alert created: {alert_data['title']}")
+                else:
+                    self.log_result(f"Alert Creation - {alert_data['priority']}", False, 
+                                  f"Status: {response.status_code}", response.text)
+            except Exception as e:
+                self.log_result(f"Alert Creation - {alert_data['priority']}", False, 
+                              f"Exception: {str(e)}")
+
+        # Test 2: Get alerts
+        try:
+            response = self.session.get(f"{self.base_url}/alerts")
+            if response.status_code == 200:
+                result = response.json()
+                self.log_result("Alert Retrieval", True, 
+                              f"Retrieved {len(result.get('alerts', []))} alerts")
+            else:
+                self.log_result("Alert Retrieval", False, 
+                              f"Status: {response.status_code}", response.text)
+        except Exception as e:
+            self.log_result("Alert Retrieval", False, f"Exception: {str(e)}")
+
+        # Test 3: Get alerts with priority filter
+        try:
+            response = self.session.get(f"{self.base_url}/alerts", params={"priority": "critical"})
+            if response.status_code == 200:
+                result = response.json()
+                self.log_result("Alert Retrieval with Priority Filter", True, 
+                              "Filtered alerts by critical priority")
+            else:
+                self.log_result("Alert Retrieval with Priority Filter", False, 
+                              f"Status: {response.status_code}", response.text)
+        except Exception as e:
+            self.log_result("Alert Retrieval with Priority Filter", False, f"Exception: {str(e)}")
+
+        # Test 4: Get alerts with status filter
+        try:
+            response = self.session.get(f"{self.base_url}/alerts", params={"status": "active"})
+            if response.status_code == 200:
+                result = response.json()
+                self.log_result("Alert Retrieval with Status Filter", True, 
+                              "Filtered alerts by active status")
+            else:
+                self.log_result("Alert Retrieval with Status Filter", False, 
+                              f"Status: {response.status_code}", response.text)
+        except Exception as e:
+            self.log_result("Alert Retrieval with Status Filter", False, f"Exception: {str(e)}")
+
+        # Test 5: Acknowledge alert
+        if created_alert_ids:
+            try:
+                alert_id = created_alert_ids[0]
+                acknowledge_data = {
+                    "acknowledged_by": "operator_001",
+                    "acknowledgment_note": "Alert reviewed and action taken"
+                }
+                response = self.session.put(f"{self.base_url}/alerts/{alert_id}/acknowledge", 
+                                          json=acknowledge_data)
+                if response.status_code == 200:
+                    result = response.json()
+                    self.log_result("Alert Acknowledgment", True, 
+                                  f"Alert {alert_id} acknowledged successfully")
+                else:
+                    self.log_result("Alert Acknowledgment", False, 
+                                  f"Status: {response.status_code}", response.text)
+            except Exception as e:
+                self.log_result("Alert Acknowledgment", False, f"Exception: {str(e)}")
+
+    def test_idle_rake_detection_rescheduling(self):
+        """Test Idle Rake Detection & Rescheduling endpoints"""
+        print("=== Testing Idle Rake Detection & Rescheduling ===")
+        
+        # Test 1: Detect idle rakes
+        try:
+            response = self.session.get(f"{self.base_url}/idle-rakes/detect")
+            if response.status_code == 200:
+                result = response.json()
+                idle_rakes = result.get('idle_rakes', [])
+                self.log_result("Idle Rake Detection", True, 
+                              f"Detected {len(idle_rakes)} idle rakes with AI suggestions")
+            else:
+                self.log_result("Idle Rake Detection", False, 
+                              f"Status: {response.status_code}", response.text)
+        except Exception as e:
+            self.log_result("Idle Rake Detection", False, f"Exception: {str(e)}")
+
+        # Test 2: Get list of detected idle rakes
+        try:
+            response = self.session.get(f"{self.base_url}/idle-rakes")
+            if response.status_code == 200:
+                result = response.json()
+                self.log_result("Idle Rakes List", True, 
+                              f"Retrieved idle rakes list with {len(result.get('idle_rakes', []))} entries")
+            else:
+                self.log_result("Idle Rakes List", False, 
+                              f"Status: {response.status_code}", response.text)
+        except Exception as e:
+            self.log_result("Idle Rakes List", False, f"Exception: {str(e)}")
+
+    def test_predictive_maintenance_alerts(self):
+        """Test Predictive Maintenance Alerts endpoints"""
+        print("=== Testing Predictive Maintenance Alerts ===")
+        
+        # Test 1: Run AI-based predictive maintenance analysis
+        maintenance_data = {
+            "entity_type": "wagon",
+            "entity_ids": [self.existing_ids.get('wagon_id', 'test_wagon_id')],
+            "analysis_type": "comprehensive",
+            "include_loading_points": True
+        }
+        
+        try:
+            response = self.session.post(f"{self.base_url}/maintenance/predict", json=maintenance_data)
+            if response.status_code == 200:
+                result = response.json()
+                predictions = result.get('predictions', [])
+                self.log_result("Predictive Maintenance Analysis", True, 
+                              f"Generated {len(predictions)} maintenance predictions")
+            else:
+                self.log_result("Predictive Maintenance Analysis", False, 
+                              f"Status: {response.status_code}", response.text)
+        except Exception as e:
+            self.log_result("Predictive Maintenance Analysis", False, f"Exception: {str(e)}")
+
+        # Test 2: Get maintenance alerts
+        try:
+            response = self.session.get(f"{self.base_url}/maintenance/alerts")
+            if response.status_code == 200:
+                result = response.json()
+                alerts = result.get('alerts', [])
+                self.log_result("Maintenance Alerts Retrieval", True, 
+                              f"Retrieved {len(alerts)} maintenance alerts")
+            else:
+                self.log_result("Maintenance Alerts Retrieval", False, 
+                              f"Status: {response.status_code}", response.text)
+        except Exception as e:
+            self.log_result("Maintenance Alerts Retrieval", False, f"Exception: {str(e)}")
+
+        # Test 3: Get maintenance alerts with severity filter
+        try:
+            response = self.session.get(f"{self.base_url}/maintenance/alerts", 
+                                      params={"severity": "high"})
+            if response.status_code == 200:
+                result = response.json()
+                self.log_result("Maintenance Alerts with Severity Filter", True, 
+                              "Filtered maintenance alerts by high severity")
+            else:
+                self.log_result("Maintenance Alerts with Severity Filter", False, 
+                              f"Status: {response.status_code}", response.text)
+        except Exception as e:
+            self.log_result("Maintenance Alerts with Severity Filter", False, f"Exception: {str(e)}")
+
+    def test_auto_rescheduling_engine(self):
+        """Test Auto Rescheduling Engine endpoints"""
+        print("=== Testing Auto Rescheduling Engine ===")
+        
+        # Test 1: Auto reschedule a rake
+        reschedule_data = {
+            "rake_id": self.existing_ids.get('rake_id', 'test_rake_id'),
+            "reason": "route_closure",
+            "priority": "high",
+            "constraints": {
+                "max_delay_hours": 24,
+                "preferred_routes": ["alternate_route_1", "alternate_route_2"],
+                "cost_limit": 50000
+            }
+        }
+        
+        try:
+            response = self.session.post(f"{self.base_url}/rescheduling/auto-reschedule", 
+                                       json=reschedule_data)
+            if response.status_code == 200:
+                result = response.json()
+                self.log_result("Auto Rescheduling", True, 
+                              f"Rake rescheduled with AI recommendations")
+            else:
+                self.log_result("Auto Rescheduling", False, 
+                              f"Status: {response.status_code}", response.text)
+        except Exception as e:
+            self.log_result("Auto Rescheduling", False, f"Exception: {str(e)}")
+
+        # Test 2: Report route disruptions
+        disruption_data = {
+            "route_id": "route_001",
+            "disruption_type": "signal_failure",
+            "severity": "high",
+            "estimated_duration_hours": 6,
+            "affected_area": "Mumbai-Pune section",
+            "alternative_routes": ["route_002", "route_003"],
+            "reported_by": "control_room_operator"
+        }
+        
+        try:
+            response = self.session.post(f"{self.base_url}/route-disruptions", json=disruption_data)
+            if response.status_code == 200:
+                result = response.json()
+                self.log_result("Route Disruption Reporting", True, 
+                              f"Disruption reported: {disruption_data['disruption_type']}")
+            else:
+                self.log_result("Route Disruption Reporting", False, 
+                              f"Status: {response.status_code}", response.text)
+        except Exception as e:
+            self.log_result("Route Disruption Reporting", False, f"Exception: {str(e)}")
+
+    def test_realtime_collaboration_panel(self):
+        """Test Real-time Collaboration Panel endpoints"""
+        print("=== Testing Real-time Collaboration Panel ===")
+        
+        # Test 1: Post team messages with different teams and urgency levels
+        message_tests = [
+            {
+                "team": "plant",
+                "sender_id": "plant_manager_001",
+                "sender_name": "Plant Manager",
+                "message": "Loading Point LP-1 maintenance scheduled for tomorrow 6 AM",
+                "urgency": "normal",
+                "related_entity_type": "loading_point",
+                "related_entity_id": self.existing_ids.get('loading_point_id', 'test_lp_id'),
+                "tags": ["maintenance", "schedule"]
+            },
+            {
+                "team": "rail",
+                "sender_id": "rail_coordinator_001", 
+                "sender_name": "Rail Coordinator",
+                "message": "URGENT: Signal failure on Mumbai-Pune route, expect 4-hour delays",
+                "urgency": "urgent",
+                "related_entity_type": "route",
+                "related_entity_id": "route_001",
+                "tags": ["urgent", "delay", "signal_failure"]
+            },
+            {
+                "team": "marketing",
+                "sender_id": "marketing_head_001",
+                "sender_name": "Marketing Head", 
+                "message": "Customer ABC Steel requesting priority dispatch for Order #12345",
+                "urgency": "high",
+                "related_entity_type": "order",
+                "related_entity_id": "order_12345",
+                "tags": ["customer_request", "priority"]
+            },
+            {
+                "team": "operations",
+                "sender_id": "ops_supervisor_001",
+                "sender_name": "Operations Supervisor",
+                "message": "Rake R001 loaded and ready for dispatch from Stockyard A",
+                "urgency": "normal",
+                "related_entity_type": "rake",
+                "related_entity_id": self.existing_ids.get('rake_id', 'test_rake_id'),
+                "tags": ["dispatch", "ready"]
+            }
+        ]
+        
+        for message_data in message_tests:
+            try:
+                response = self.session.post(f"{self.base_url}/collaboration/message", json=message_data)
+                if response.status_code == 200:
+                    result = response.json()
+                    self.log_result(f"Collaboration Message - {message_data['team']} ({message_data['urgency']})", 
+                                  True, f"Message posted by {message_data['sender_name']}")
+                else:
+                    self.log_result(f"Collaboration Message - {message_data['team']}", False, 
+                                  f"Status: {response.status_code}", response.text)
+            except Exception as e:
+                self.log_result(f"Collaboration Message - {message_data['team']}", False, 
+                              f"Exception: {str(e)}")
+
+        # Test 2: Get messages
+        try:
+            response = self.session.get(f"{self.base_url}/collaboration/messages")
+            if response.status_code == 200:
+                result = response.json()
+                messages = result.get('messages', [])
+                self.log_result("Collaboration Messages Retrieval", True, 
+                              f"Retrieved {len(messages)} messages")
+            else:
+                self.log_result("Collaboration Messages Retrieval", False, 
+                              f"Status: {response.status_code}", response.text)
+        except Exception as e:
+            self.log_result("Collaboration Messages Retrieval", False, f"Exception: {str(e)}")
+
+        # Test 3: Get messages with team filter
+        try:
+            response = self.session.get(f"{self.base_url}/collaboration/messages", 
+                                      params={"team": "rail"})
+            if response.status_code == 200:
+                result = response.json()
+                self.log_result("Collaboration Messages with Team Filter", True, 
+                              "Filtered messages by rail team")
+            else:
+                self.log_result("Collaboration Messages with Team Filter", False, 
+                              f"Status: {response.status_code}", response.text)
+        except Exception as e:
+            self.log_result("Collaboration Messages with Team Filter", False, f"Exception: {str(e)}")
+
+        # Test 4: Get messages with related entity filter
+        if self.existing_ids.get('rake_id'):
+            try:
+                response = self.session.get(f"{self.base_url}/collaboration/messages", 
+                                          params={"related_entity_id": self.existing_ids['rake_id']})
+                if response.status_code == 200:
+                    result = response.json()
+                    self.log_result("Collaboration Messages with Entity Filter", True, 
+                                  f"Filtered messages by entity: {self.existing_ids['rake_id']}")
+                else:
+                    self.log_result("Collaboration Messages with Entity Filter", False, 
+                                  f"Status: {response.status_code}", response.text)
+            except Exception as e:
+                self.log_result("Collaboration Messages with Entity Filter", False, f"Exception: {str(e)}")
+
+    def test_historical_data_archive_system(self):
+        """Test Historical Data Archive System endpoints"""
+        print("=== Testing Historical Data Archive System ===")
+        
+        # Test 1: Query historical data for different entity types
+        archive_queries = [
+            {
+                "entity_type": "rakes",
+                "start_date": (datetime.utcnow() - timedelta(days=30)).isoformat(),
+                "end_date": datetime.utcnow().isoformat(),
+                "filters": {"status": "delivered"},
+                "include_related_data": True
+            },
+            {
+                "entity_type": "orders", 
+                "start_date": (datetime.utcnow() - timedelta(days=7)).isoformat(),
+                "end_date": datetime.utcnow().isoformat(),
+                "filters": {"priority": "high"},
+                "include_related_data": False
+            },
+            {
+                "entity_type": "wagons",
+                "start_date": (datetime.utcnow() - timedelta(days=15)).isoformat(),
+                "end_date": datetime.utcnow().isoformat(),
+                "filters": {"status": "maintenance"},
+                "include_related_data": True
+            },
+            {
+                "entity_type": "alerts",
+                "start_date": (datetime.utcnow() - timedelta(days=3)).isoformat(),
+                "end_date": datetime.utcnow().isoformat(),
+                "filters": {"priority": "critical"},
+                "include_related_data": False
+            },
+            {
+                "entity_type": "weighbridge",
+                "start_date": (datetime.utcnow() - timedelta(days=1)).isoformat(),
+                "end_date": datetime.utcnow().isoformat(),
+                "filters": {"status": "overload"},
+                "include_related_data": True
+            },
+            {
+                "entity_type": "gps_tracking",
+                "start_date": (datetime.utcnow() - timedelta(hours=12)).isoformat(),
+                "end_date": datetime.utcnow().isoformat(),
+                "filters": {"route_status": "delayed"},
+                "include_related_data": False
+            }
+        ]
+        
+        for query_data in archive_queries:
+            try:
+                response = self.session.post(f"{self.base_url}/archive/query", json=query_data)
+                if response.status_code == 200:
+                    result = response.json()
+                    records = result.get('records', [])
+                    self.log_result(f"Archive Query - {query_data['entity_type']}", True, 
+                                  f"Retrieved {len(records)} historical records")
+                else:
+                    self.log_result(f"Archive Query - {query_data['entity_type']}", False, 
+                                  f"Status: {response.status_code}", response.text)
+            except Exception as e:
+                self.log_result(f"Archive Query - {query_data['entity_type']}", False, 
+                              f"Exception: {str(e)}")
+
+        # Test 2: Get archive summary statistics
+        try:
+            response = self.session.get(f"{self.base_url}/archive/summary")
+            if response.status_code == 200:
+                result = response.json()
+                self.log_result("Archive Summary Statistics", True, 
+                              f"Retrieved archive statistics for {len(result.get('entity_counts', {}))} entity types")
+            else:
+                self.log_result("Archive Summary Statistics", False, 
+                              f"Status: {response.status_code}", response.text)
+        except Exception as e:
+            self.log_result("Archive Summary Statistics", False, f"Exception: {str(e)}")
+
+    def run_all_tests(self):
+        """Run all operational feature tests"""
+        print("🚀 Starting Comprehensive Backend Testing for Operational & Real-Time Features")
+        print("=" * 80)
+        
+        # Initialize sample data first
+        try:
+            response = self.session.post(f"{self.base_url}/initialize-sample-data")
+            if response.status_code == 200:
+                print("✅ Sample data initialized successfully")
+            else:
+                print(f"⚠️  Sample data initialization: {response.status_code}")
+        except Exception as e:
+            print(f"⚠️  Sample data initialization failed: {e}")
+        
+        # Get existing IDs for testing
+        self.get_existing_ids()
+        
+        # Run all operational feature tests
+        self.test_iot_sensors_integration()
+        self.test_smart_weighbridge_integration()
+        self.test_gps_tracking_enhancement()
+        self.test_smart_alert_system()
+        self.test_idle_rake_detection_rescheduling()
+        self.test_predictive_maintenance_alerts()
+        self.test_auto_rescheduling_engine()
+        self.test_realtime_collaboration_panel()
+        self.test_historical_data_archive_system()
         
         # Print summary
-        print("\n" + "=" * 80)
-        print("📊 TEST SUMMARY")
+        self.print_summary()
+
+    def print_summary(self):
+        """Print test summary"""
         print("=" * 80)
+        print("🏁 TEST SUMMARY")
+        print("=" * 80)
+        
+        total_tests = len(self.test_results)
+        passed_tests = len([r for r in self.test_results if r['success']])
+        failed_tests = total_tests - passed_tests
+        
         print(f"Total Tests: {total_tests}")
-        print(f"Passed: {passed_tests}")
-        print(f"Failed: {total_tests - passed_tests}")
-        print(f"Success Rate: {(passed_tests/total_tests)*100:.1f}%")
+        print(f"Passed: {passed_tests} ✅")
+        print(f"Failed: {failed_tests} ❌")
+        print(f"Success Rate: {(passed_tests/total_tests*100):.1f}%")
         
-        # Print failed tests
-        failed_tests = [result for result in self.test_results if not result['success']]
-        if failed_tests:
-            print(f"\n❌ FAILED TESTS ({len(failed_tests)}):")
-            for test in failed_tests:
-                print(f"  • {test['test']}: {test['message']}")
+        if failed_tests > 0:
+            print("\n❌ FAILED TESTS:")
+            for result in self.test_results:
+                if not result['success']:
+                    print(f"  - {result['test']}: {result['details']}")
         
-        print("\n✅ All advanced control room features tested!")
-        return passed_tests, total_tests, failed_tests
+        print("\n" + "=" * 80)
 
 if __name__ == "__main__":
-    tester = AdvancedBackendTester()
-    passed, total, failed = tester.run_all_tests()
-    
-    # Exit with appropriate code
-    exit(0 if len(failed) == 0 else 1)
+    tester = BackendTester()
+    tester.run_all_tests()
