@@ -370,15 +370,18 @@ test_plan:
 
   - task: "Cost & Efficiency Optimization - Wagon Utilization Maximization"
     implemented: true
-    working: "NA"
+    working: true
     file: "server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         - working: "NA"
           agent: "main"
           comment: "Wagon utilization analysis and optimization endpoints created. Ensures no partial loading."
+        - working: true
+          agent: "testing"
+          comment: "Comprehensive testing completed. Both /wagon-utilization/analyze and /wagon-utilization/optimize endpoints working correctly with proper data validation."
   
   - task: "Cost & Efficiency Optimization - Real-time Demurrage Tracking & Alerts"
     implemented: true
