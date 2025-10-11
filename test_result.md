@@ -711,7 +711,15 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Frontend navigation and data flow"
+    - "Operational Feature - IoT Sensors Integration"
+    - "Operational Feature - Smart Weighbridge Integration"
+    - "Operational Feature - GPS Tracking Enhancement"
+    - "Operational Feature - Smart Alert System"
+    - "Operational Feature - Idle Rake Detection & Rescheduling"
+    - "Operational Feature - Predictive Maintenance Alerts"
+    - "Operational Feature - Auto Rescheduling Engine"
+    - "Operational Feature - Real-time Collaboration Panel"
+    - "Operational Feature - Historical Data Archive System"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
