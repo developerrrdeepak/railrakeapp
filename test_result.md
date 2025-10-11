@@ -521,6 +521,114 @@ backend:
         - working: true
           agent: "testing"
           comment: "AI prescriptive multi-objective optimization tested successfully. /ai/prescriptive-optimization endpoint working with advanced GPT-4o powered optimization balancing cost, SLA compliance, and utilization."
+  
+  - task: "Operational Feature - IoT Sensors Integration"
+    implemented: true
+    working: "NA"
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "IoT sensor data collection endpoints: POST /iot/sensors for data ingestion, GET /iot/sensors/real-time for monitoring. Auto-creates alerts for warning/critical status."
+  
+  - task: "Operational Feature - Smart Weighbridge Integration"
+    implemented: true
+    working: "NA"
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Weighbridge endpoints: POST /weighbridge/reading for weight verification, GET /weighbridge/readings with filters. Detects overload/underload, creates critical alerts."
+  
+  - task: "Operational Feature - GPS Tracking Enhancement"
+    implemented: true
+    working: "NA"
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Enhanced GPS tracking: POST /gps/route-progress for updates, GET /gps/route-progress/{rake_id} for specific rake, GET /gps/all-active-rakes for real-time monitoring of all active rakes."
+  
+  - task: "Operational Feature - Smart Alert System"
+    implemented: true
+    working: "NA"
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Multi-channel alert system: POST /alerts for creation, GET /alerts with priority/status filters, PUT /alerts/{id}/acknowledge for acknowledgment. Supports SMS, email, app channels."
+  
+  - task: "Operational Feature - Idle Rake Detection & Rescheduling"
+    implemented: true
+    working: "NA"
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Idle rake detection: GET /idle-rakes/detect for automatic detection with AI-powered rescheduling suggestions, GET /idle-rakes for list. Calculates demurrage costs and creates alerts."
+  
+  - task: "Operational Feature - Predictive Maintenance Alerts"
+    implemented: true
+    working: "NA"
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "AI-based predictive maintenance: POST /maintenance/predict for ML analysis of wagons and loading points, GET /maintenance/alerts with severity filter. Predicts failures with confidence scores."
+  
+  - task: "Operational Feature - Auto Rescheduling Engine"
+    implemented: true
+    working: "NA"
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Auto rescheduling: POST /rescheduling/auto-reschedule for AI-powered rescheduling with cost/time impact analysis, POST /route-disruptions for reporting disruptions."
+  
+  - task: "Operational Feature - Real-time Collaboration Panel"
+    implemented: true
+    working: "NA"
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Collaboration panel: POST /collaboration/message for team messages, GET /collaboration/messages with team/entity filters. Creates alerts for urgent messages."
+  
+  - task: "Operational Feature - Historical Data Archive System"
+    implemented: true
+    working: "NA"
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Archive system: POST /archive/query for querying historical data with date ranges and filters, GET /archive/summary for data statistics. Supports rakes, orders, wagons, alerts, weighbridge, GPS data."
 
 frontend:
   - task: "Welcome screen with backend connection check"
