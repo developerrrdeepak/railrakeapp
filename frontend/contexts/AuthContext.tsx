@@ -127,8 +127,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const clearAuth = async () => {
-    await SecureStore.deleteItemAsync('auth_token');
-    await SecureStore.deleteItemAsync('user_data');
+    await secureStore.deleteItem('auth_token');
+    await secureStore.deleteItem('user_data');
     setToken(null);
     setUser(null);
   };
