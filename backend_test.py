@@ -12,7 +12,7 @@ from typing import Dict, List, Any
 import random
 
 # Backend URL from frontend .env
-BACKEND_URL = "https://rail-analytics-hub.preview.emergentagent.com/api"
+BACKEND_URL = "https://rake-planner-1.preview.emergentagent.com/api"
 
 class BackendTester:
     def __init__(self):
