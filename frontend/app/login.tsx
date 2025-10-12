@@ -31,12 +31,16 @@ export default function LoginScreen() {
       return;
     }
 
+    console.log('Login attempt:', employeeId);
     setLoading(true);
     try {
+      console.log('Calling login function...');
       await login(employeeId, password);
+      console.log('Login successful, navigating to tabs...');
       router.replace('/(tabs)');
     } catch (error: any) {
-      Alert.alert('Login Failed', error.message);
+      console.error('Login error:', error);
+      Alert.alert('Login Failed', error.message || 'An error occurred during login');
     } finally {
       setLoading(false);
     }
