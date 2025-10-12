@@ -110,8 +110,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       // Store credentials securely
       console.log('AuthContext: Storing credentials...');
-      await SecureStore.setItemAsync('auth_token', access_token);
-      await SecureStore.setItemAsync('user_data', JSON.stringify(userData));
+      await secureStore.setItem('auth_token', access_token);
+      await secureStore.setItem('user_data', JSON.stringify(userData));
 
       console.log('AuthContext: Setting state...');
       setToken(access_token);
