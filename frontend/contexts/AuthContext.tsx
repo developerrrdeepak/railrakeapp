@@ -71,21 +71,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const login = async (employeeId: string, password: string) => {
     try {
+      console.log('AuthContext: Starting login for', employeeId);
+      console.log('AuthContext: Backend URL:', BACKEND_URL);
+      
       const response = await axios.post(`${BACKEND_URL}/api/auth/login`, {
         employee_id: employeeId,
         password: password,
       });
 
+      console.log('AuthContext: Login response received');
       const { access_token, user: userData } = response.data;
 
       // Store credentials securely
+      console.log('AuthContext: Storing credentials...');
       await SecureStore.setItemAsync('auth_token', access_token);
       await SecureStore.setItemAsync('user_data', JSON.stringify(userData));
 
+      console.log('AuthContext: Setting state...');
       setToken(access_token);
       setUser(userData);
+      console.log('AuthContext: Login complete!');
     } catch (error: any) {
-      console.error('Login error:', error);
+      console.error('AuthContext: Login error:', error);
+      console.error('AuthContext: Error response:', error.response?.data);
       throw new Error(
         error.response?.data?.detail || 'Login failed. Please check your credentials.'
       );
