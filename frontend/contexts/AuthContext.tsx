@@ -70,8 +70,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const loadStoredAuth = async () => {
     try {
-      const storedToken = await SecureStore.getItemAsync('auth_token');
-      const storedUser = await SecureStore.getItemAsync('user_data');
+      const storedToken = await secureStore.getItem('auth_token');
+      const storedUser = await secureStore.getItem('user_data');
 
       if (storedToken && storedUser) {
         setToken(storedToken);
