@@ -6656,6 +6656,117 @@ async def manage_role_based_permissions(data: Dict[str, Any]):
         logger.error(f"RBAC permissions error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# ============================================================================
+# AUTHENTICATION ENDPOINTS
+# ============================================================================
+
+@api_router.post("/auth/initialize-users")
+async def initialize_default_users():
+    """Initialize default users in the database"""
+    try:
+        users_collection = db.users
+        
+        # Check if users already exist
+        existing_count = await users_collection.count_documents({})
+        if existing_count > 0:
+            return {"message": f"Users already initialized. Total users: {existing_count}"}
+        
+        # Create default users
+        for user_data in DEFAULT_USERS:
+            user_doc = {
+                "employee_id": user_data["employee_id"],
+                "name": user_data["name"],
+                "role": user_data["role"],
+                "plant_id": user_data.get("plant_id"),
+                "assigned_areas": user_data.get("assigned_areas", []),
+                "hashed_password": get_password_hash(user_data["password"]),
+                "created_at": datetime.utcnow()
+            }
+            await users_collection.insert_one(user_doc)
+        
+        return {
+            "message": "Default users initialized successfully",
+            "users": [
+                {
+                    "employee_id": u["employee_id"],
+                    "name": u["name"],
+                    "role": u["role"],
+                    "password": u["password"]
+                }
+                for u in DEFAULT_USERS
+            ]
+        }
+    except Exception as e:
+        logger.error(f"User initialization error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/auth/login", response_model=Token)
+async def login(login_data: LoginRequest):
+    """Authenticate user and return JWT token"""
+    try:
+        users_collection = db.users
+        
+        # Find user by employee_id
+        user_doc = await users_collection.find_one({"employee_id": login_data.employee_id})
+        
+        if not user_doc or not verify_password(login_data.password, user_doc["hashed_password"]):
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid employee ID or password"
+            )
+        
+        # Create access token
+        access_token = create_access_token(
+            data={
+                "sub": user_doc["employee_id"],
+                "name": user_doc["name"],
+                "role": user_doc["role"],
+                "plant_id": user_doc.get("plant_id"),
+                "assigned_areas": user_doc.get("assigned_areas", [])
+            }
+        )
+        
+        # Return token and user info
+        user_info = User(
+            employee_id=user_doc["employee_id"],
+            name=user_doc["name"],
+            role=user_doc["role"],
+            plant_id=user_doc.get("plant_id"),
+            assigned_areas=user_doc.get("assigned_areas", [])
+        )
+        
+        return Token(
+            access_token=access_token,
+            token_type="bearer",
+            user=user_info
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Login error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/auth/me", response_model=User)
+async def get_current_user_info(current_user: User = Depends(get_current_user)):
+    """Get current authenticated user information"""
+    return current_user
+
+@api_router.get("/auth/users")
+async def get_all_users(current_user: User = Depends(require_role("admin"))):
+    """Get all users (admin only)"""
+    try:
+        users_collection = db.users
+        users = await users_collection.find({}, {"hashed_password": 0}).to_list(length=100)
+        
+        # Convert ObjectId to string
+        for user in users:
+            user["_id"] = str(user["_id"])
+        
+        return {"users": users}
+    except Exception as e:
+        logger.error(f"Get users error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @api_router.get("/")
 async def root():
     return {"message": "Advanced Rake Formation Control Room API is running"}
