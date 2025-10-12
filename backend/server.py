@@ -17,6 +17,11 @@ import csv
 import io
 import random
 from enum import Enum
+from auth import (
+    User, UserInDB, Token, LoginRequest,
+    get_password_hash, verify_password, create_access_token,
+    get_current_user, require_role, DEFAULT_USERS
+)
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
